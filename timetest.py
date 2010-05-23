@@ -340,7 +340,7 @@ if __name__ == "__main__":
                     total_new += n
                     total_orig += o
 
-            print "%sing functions totals:" % (t[:-1].title())
+            print "%s functions totals:" % (t.title())
             if total_new > total_orig:
                 new = CSI + "31m%.3fs%s" % (total_new, reset)
                 orig = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_orig, reset, CSI, total_new-total_orig, reset, (total_new/total_orig)*100)
