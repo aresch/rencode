@@ -392,9 +392,9 @@ cdef decode_str(char *data, int *pos):
     pos[0] += x + 1
 
     cdef char *s = <char *>malloc(size)
-    memcpy(s, &data[pos[0]], size-1)
+    memcpy(s, &data[pos[0]], size)
     s[size] = '\0'
-
+    pos[0] += size
     try:
         t = s.decode("utf8")
         if len(t) != len(s):
