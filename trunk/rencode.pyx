@@ -72,9 +72,16 @@ cdef enum:
 
 cdef char _float_bits
 
-cdef swap_byte_order_short(short *s):
+cdef swap_byte_order_ushort(unsigned short *s):
     s[0] = (s[0] >> 8) | (s[0] << 8)
 
+cdef swap_byte_order_short(char *c):
+    cdef short s
+    cdef char *p = <char *>&s
+    p[0] = c[1]
+    p[1] = c[0]
+    return s
+    
 cdef swap_byte_order_uint(int *i):
     i[0] = (i[0] >> 24) | ((i[0] << 8) & 0x00FF0000) | ((i[0] >> 8) & 0x0000FF00) | (i[0] << 24)
 
@@ -154,7 +161,11 @@ cdef encode_char(char **buf, int *pos, signed char x):
 cdef encode_short(char **buf, int *pos, short x):
     write_buffer_char(buf, pos, CHR_INT2)
     if not big_endian:
-        swap_byte_order_short(&x)
+        if x > 0:
+            swap_byte_order_ushort(<unsigned short*>&x)
+        else:
+            x = swap_byte_order_short(<char*>&x)
+            
     write_buffer(buf, pos, &x, sizeof(x))
 
 cdef encode_int(char **buf, int *pos, int x):
@@ -206,6 +217,12 @@ cdef encode_str(char **buf, int *pos, char* x):
 cdef encode_none(char **buf, int *pos):
     write_buffer_char(buf, pos, CHR_NONE)
 
+cdef encode_bool(char **buf, int *pos, bool x):
+    if x:
+        write_buffer_char(buf, pos, CHR_TRUE)
+    else:
+        write_buffer_char(buf, pos, CHR_FALSE)
+        
 cdef encode_list(char **buf, int *pos, x):
     if len(x) < LIST_FIXED_COUNT:
         write_buffer_char(buf, pos, LIST_FIXED_START + len(x))
@@ -230,7 +247,7 @@ cdef encode_dict(char **buf, int *pos, x):
             encode(buf, pos, v)
         write_buffer_char(buf, pos, CHR_TERM)
 
-from types import StringType, IntType, LongType, DictType, ListType, TupleType, FloatType, NoneType, UnicodeType
+from types import StringType, IntType, LongType, DictType, ListType, TupleType, FloatType, NoneType, UnicodeType, BooleanType
 
 cdef encode(char **buf, int *pos, data):
     t = type(data)
@@ -266,6 +283,9 @@ cdef encode(char **buf, int *pos, data):
     elif t == NoneType:
         encode_none(buf, pos)
 
+    elif t == BooleanType:
+        encode_bool(buf, pos, data)
+        
     elif t == ListType or t == TupleType:
         encode_list(buf, pos, data)
 
@@ -287,3 +307,188 @@ def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     cdef int pos = 0
     encode(&buf, &pos, data)
     return buf[:pos]
+
+cdef decode_char(char *data, int *pos):
+    cdef char c
+    memcpy(&c, &data[pos[0]+1], 1)
+    pos[0] += 2
+    return c
+
+cdef decode_short(char *data, int *pos):
+    cdef short s
+    memcpy(&s, &data[pos[0]+1], 2)
+    pos[0] += 3
+    if not big_endian:
+        s = swap_byte_order_short(<char*>&s)
+    return s
+
+cdef decode_int(char *data, int *pos):
+    cdef int i
+    memcpy(&i, &data[pos[0]+1], 4)
+    pos[0] += 5
+    if not big_endian:
+        i = swap_byte_order_int(<char*>&i)
+    return i
+
+cdef decode_long_long(char *data, int *pos):
+    cdef long long l
+    memcpy(&l, &data[pos[0]+1], 8)
+    pos[0] += 9
+    if not big_endian:
+        l = swap_byte_order_long_long(<char*>&l)
+    return l
+
+cdef decode_fixed_pos_int(char *data, int *pos):
+    pos[0] += 1
+    return data[pos[0] - 1] - INT_POS_FIXED_START
+
+cdef decode_fixed_neg_int(char *data, int *pos):
+    pos[0] += 1
+    return (data[pos[0] - 1] - INT_NEG_FIXED_START + 1)*-1
+
+cdef decode_big_number(char *data, int *pos):
+    pos[0] += 1
+    s = ""
+    while (data[pos[0]] != CHR_TERM):
+        s += chr(data[pos[0]])
+        pos[0] += 1
+    pos[0] += 1
+    return int(s)
+
+cdef decode_float32(char *data, int *pos):
+    cdef float f
+    memcpy(&f, &data[pos[0]+1], 4)
+    pos[0] += pos[0] + 5
+    if not big_endian:
+        f = swap_byte_order_float(<char*>&f)
+    return f
+
+cdef decode_float64(char *data, int *pos):
+    cdef double d
+    memcpy(&d, &data[pos[0]+1], 8)
+    pos[0] += pos[0] + 9
+    if not big_endian:
+        d = swap_byte_order_double(<char*>&d)
+    return d
+
+cdef decode_fixed_str(char *data, int *pos):
+    cdef unsigned char size = data[pos[0]]
+    s = data[pos[0]+1:pos[0] + size - STR_FIXED_START + 1]
+    try:
+        t = s.decode("utf8")
+        if len(t) != len(s):
+            s = t
+    except UnicodeEncodeError:
+        pass
+    pos[0] += size - STR_FIXED_START + 1
+    return s
+    
+cdef decode_str(char *data, int *pos):
+    size = ""
+    while (chr(data[pos[0]]) != ":"):
+        size += chr(data[pos[0]])
+        pos[0] += 1
+    pos[0] += 1
+    cdef int i
+    s = ""
+    for i in range(int(size)):
+        s += chr(data[pos[0]])
+        pos[0] += 1
+    try:
+        t = s.decode("utf8")
+        if len(t) != len(s):
+            s = t
+    except UnicodeEncodeError:
+        pass
+    return s
+
+cdef decode_fixed_list(char *data, int *pos):
+    l = []
+    size = <unsigned char>data[pos[0]] - LIST_FIXED_START
+    pos[0] += 1
+    cdef int i
+    for i in range(size):
+        l.append(decode(data, pos))
+    return l
+    
+cdef decode_list(char *data, int *pos):
+    l = []
+    pos[0] += 1
+    while data[pos[0]] != CHR_TERM:
+        l.append(decode(data, pos))
+    pos[0] += 1
+    return l
+
+cdef decode_fixed_dict(char *data, int *pos):
+    d = {}
+    size = <unsigned char>data[pos[0]] - DICT_FIXED_START
+    pos[0] += 1
+    cdef int i
+    for i in range(size):
+        key = decode(data, pos)
+        value = decode(data, pos)
+        d[key] = value
+    return d
+    
+cdef decode_dict(char *data, int *pos):
+    d = {}
+    pos[0] += 1
+    while data[pos[0]] != CHR_TERM:
+        key = decode(data, pos)
+        value = decode(data, pos)
+        d[key] = value
+    pos[0] += 1
+    return d
+    
+cdef decode(char *data, int *pos):
+    cdef unsigned char typecode = data[pos[0]]
+    if typecode == CHR_INT1:
+        return decode_char(data, pos)
+    elif typecode == CHR_INT2:
+        return decode_short(data, pos)
+    elif typecode == CHR_INT4:
+        return decode_int(data, pos)
+    elif typecode == CHR_INT8:
+        return decode_long_long(data, pos)
+    elif INT_POS_FIXED_START <= typecode < INT_POS_FIXED_START + INT_POS_FIXED_COUNT:
+        return decode_fixed_pos_int(data, pos)
+    elif INT_NEG_FIXED_START <= typecode < INT_NEG_FIXED_START + INT_NEG_FIXED_COUNT:
+        return decode_fixed_neg_int(data, pos)
+    elif typecode == CHR_INT:
+        return decode_big_number(data, pos)
+    elif typecode == CHR_FLOAT32:
+        return decode_float32(data, pos)
+    elif typecode == CHR_FLOAT64:
+        return decode_float64(data, pos)
+    elif STR_FIXED_START <= typecode < STR_FIXED_START + STR_FIXED_COUNT:
+        return decode_fixed_str(data, pos)
+    elif 49 <= typecode <= 57:
+        return decode_str(data, pos)
+    elif typecode == CHR_NONE:
+        pos[0] += 1
+        return None
+    elif typecode == CHR_TRUE:
+        pos[0] += 1
+        return True
+    elif typecode == CHR_FALSE:
+        pos[0] += 1
+        return False
+    elif LIST_FIXED_START <= typecode < LIST_FIXED_START + LIST_FIXED_COUNT:
+        return decode_fixed_list(data, pos)
+    elif typecode == CHR_LIST:
+        return decode_list(data, pos)
+    elif DICT_FIXED_START <= typecode < DICT_FIXED_START + DICT_FIXED_COUNT:
+        return decode_fixed_dict(data, pos)
+    elif typecode == CHR_DICT:
+        return decode_dict(data, pos)
+
+def loads(data):
+    """
+    Decodes the string into an object
+
+    :param data: the string to decode
+    :type data: string
+
+    """
+    cdef int pos = 0
+    return decode(data, &pos)
