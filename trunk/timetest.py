@@ -271,18 +271,28 @@ overall = [
     10,
     120,
     15600,
+    -15600,
     7483648,
+    -7483648,
     8223372036854775808,
+    -8223372036854775808,
     int("9"*62),
     1227688834.643409,
-    None
+    None,
+    True
 ]
 
-def test_overall():
+def test_overall_encode():
     rencode.dumps(overall)
 
-def test_overall_orig():
+def test_overall_encode_orig():
     rencode_orig.dumps(overall)
+
+def test_overall_decode():
+    rencode.loads('\xd180:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6\x8bfixedlength\x8dunicodestring80:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6O\n>x?<\xf0?\xc3\x10@\x00r1\x00@\xff\x8d\xcf\x00Ar\x1fILX\x9c\x00\x00A\x8d\xe0\xb6\xb3\xa7d\x00\x00=99999999999999999999999999999999999999999999999999999999999999\x7fBN\x92Z\x17EC')
+
+def test_overall_decode_orig():
+    rencode_orig.loads('\xd180:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6\x8bfixedlength\x8dunicodestring80:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6O\n>x?<\xf0?\xc3\x10@\x00r1\x00@\xff\x8d\xcf\x00Ar\x1fILX\x9c\x00\x00A\x8d\xe0\xb6\xb3\xa7d\x00\x00=99999999999999999999999999999999999999999999999999999999999999\x7fBN\x92Z\x17EC')
 
 
 if __name__ == "__main__":
@@ -311,16 +321,16 @@ if __name__ == "__main__":
 
     loc = locals().keys()
 
-    for t in ("encode", "decode"):
+    for t in ("encode", "decode", "overall"):
         print "*" * 79
-        print "%sing functions:" % (t[:-1].title())
+        print "%s functions:" % (t.title())
         print "*" * 79
         print ""
 
         total_new = 0.0
         total_orig = 0.0
         for func in loc:
-            if func.startswith("test_%s_" % t) and not func.endswith("_orig"):
+            if func.startswith("test_%s" % t) and not func.endswith("_orig"):
                 n, o = do_test(func)
                 total_new += n
                 total_orig += o
