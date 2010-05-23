@@ -81,7 +81,7 @@ cdef swap_byte_order_short(char *c):
     p[0] = c[1]
     p[1] = c[0]
     return s
-    
+
 cdef swap_byte_order_uint(int *i):
     i[0] = (i[0] >> 24) | ((i[0] << 8) & 0x00FF0000) | ((i[0] >> 8) & 0x0000FF00) | (i[0] << 24)
 
@@ -165,7 +165,7 @@ cdef encode_short(char **buf, int *pos, short x):
             swap_byte_order_ushort(<unsigned short*>&x)
         else:
             x = swap_byte_order_short(<char*>&x)
-            
+
     write_buffer(buf, pos, &x, sizeof(x))
 
 cdef encode_int(char **buf, int *pos, int x):
@@ -222,7 +222,7 @@ cdef encode_bool(char **buf, int *pos, bool x):
         write_buffer_char(buf, pos, CHR_TRUE)
     else:
         write_buffer_char(buf, pos, CHR_FALSE)
-        
+
 cdef encode_list(char **buf, int *pos, x):
     if len(x) < LIST_FIXED_COUNT:
         write_buffer_char(buf, pos, LIST_FIXED_START + len(x))
@@ -285,7 +285,7 @@ cdef encode(char **buf, int *pos, data):
 
     elif t == BooleanType:
         encode_bool(buf, pos, data)
-        
+
     elif t == ListType or t == TupleType:
         encode_list(buf, pos, data)
 
@@ -382,7 +382,7 @@ cdef decode_fixed_str(char *data, int *pos):
         pass
     pos[0] += size - STR_FIXED_START + 1
     return s
-    
+
 cdef decode_str(char *data, int *pos):
     size = ""
     while (chr(data[pos[0]]) != ":"):
@@ -410,7 +410,7 @@ cdef decode_fixed_list(char *data, int *pos):
     for i in range(size):
         l.append(decode(data, pos))
     return l
-    
+
 cdef decode_list(char *data, int *pos):
     l = []
     pos[0] += 1
@@ -429,7 +429,7 @@ cdef decode_fixed_dict(char *data, int *pos):
         value = decode(data, pos)
         d[key] = value
     return d
-    
+
 cdef decode_dict(char *data, int *pos):
     d = {}
     pos[0] += 1
@@ -439,7 +439,7 @@ cdef decode_dict(char *data, int *pos):
         d[key] = value
     pos[0] += 1
     return d
-    
+
 cdef decode(char *data, int *pos):
     cdef unsigned char typecode = data[pos[0]]
     if typecode == CHR_INT1:
