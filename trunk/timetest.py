@@ -289,11 +289,13 @@ def test_overall_encode():
 def test_overall_encode_orig():
     rencode_orig.dumps(overall)
 
+overall_decode_str = rencode_orig.dumps(overall)
+
 def test_overall_decode():
-    rencode.loads('\xd180:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6\x8bfixedlength\x8dunicodestring80:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6O\n>x?<\xf0?\xc3\x10@\x00r1\x00@\xff\x8d\xcf\x00Ar\x1fILX\x9c\x00\x00A\x8d\xe0\xb6\xb3\xa7d\x00\x00=99999999999999999999999999999999999999999999999999999999999999\x7fBN\x92Z\x17EC')
+    rencode.loads(overall_decode_str)
 
 def test_overall_decode_orig():
-    rencode_orig.loads('\xd180:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6\x8bfixedlength\x8dunicodestring80:5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6O\n>x?<\xf0?\xc3\x10@\x00r1\x00@\xff\x8d\xcf\x00Ar\x1fILX\x9c\x00\x00A\x8d\xe0\xb6\xb3\xa7d\x00\x00=99999999999999999999999999999999999999999999999999999999999999\x7fBN\x92Z\x17EC')
+    rencode_orig.loads(overall_decode_str)
 
 
 if __name__ == "__main__":
