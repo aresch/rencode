@@ -26,6 +26,7 @@ cdef extern from "string.h":
     void *memcpy(void*, void*, size_t)
 cdef extern from "stdlib.h":
     void *realloc(void*, size_t)
+    void *malloc(size_t)
 
 # Determine host byte-order
 cdef bool big_endian = False
@@ -384,16 +385,16 @@ cdef decode_fixed_str(char *data, int *pos):
     return s
 
 cdef decode_str(char *data, int *pos):
-    size = ""
-    while (chr(data[pos[0]]) != ":"):
-        size += chr(data[pos[0]])
-        pos[0] += 1
-    pos[0] += 1
-    cdef int i
-    s = ""
-    for i in range(int(size)):
-        s += chr(data[pos[0]])
-        pos[0] += 1
+    cdef int x = 0
+    while (data[pos[0]+x] != 58):
+        x += 1
+    cdef int size = int(data[pos[0]:pos[0]+x])
+    pos[0] += x + 1
+
+    cdef char *s = <char *>malloc(size)
+    memcpy(s, &data[pos[0]], size-1)
+    s[size] = '\0'
+
     try:
         t = s.decode("utf8")
         if len(t) != len(s):
