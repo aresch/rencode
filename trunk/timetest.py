@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # timetest.py
 #
@@ -297,6 +298,7 @@ def test_overall_decode_orig():
 
 if __name__ == "__main__":
     import timeit
+    import sys
 
     iterations = 10000
     # ANSI escape codes
@@ -319,30 +321,34 @@ if __name__ == "__main__":
         print ""
         return (new_time, orig_time)
 
-    loc = locals().keys()
+    if len(sys.argv) == 1:
+        loc = locals().keys()
 
-    for t in ("encode", "decode", "overall"):
-        print "*" * 79
-        print "%s functions:" % (t.title())
-        print "*" * 79
-        print ""
+        for t in ("encode", "decode", "overall"):
+            print "*" * 79
+            print "%s functions:" % (t.title())
+            print "*" * 79
+            print ""
 
-        total_new = 0.0
-        total_orig = 0.0
-        for func in loc:
-            if func.startswith("test_%s" % t) and not func.endswith("_orig"):
-                n, o = do_test(func)
-                total_new += n
-                total_orig += o
+            total_new = 0.0
+            total_orig = 0.0
+            for func in loc:
+                if func.startswith("test_%s" % t) and not func.endswith("_orig"):
+                    n, o = do_test(func)
+                    total_new += n
+                    total_orig += o
 
-        print "%sing functions totals:" % (t[:-1].title())
-        if total_new > total_orig:
-            new = CSI + "31m%.3fs%s" % (total_new, reset)
-            orig = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_orig, reset, CSI, total_new-total_orig, reset, (total_new/total_orig)*100)
-        else:
-            new = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_new, reset, CSI, total_orig-total_new, reset, (total_orig/total_new)*100)
-            orig = CSI + "31m%.3fs%s" % (total_orig, reset)
+            print "%sing functions totals:" % (t[:-1].title())
+            if total_new > total_orig:
+                new = CSI + "31m%.3fs%s" % (total_new, reset)
+                orig = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_orig, reset, CSI, total_new-total_orig, reset, (total_new/total_orig)*100)
+            else:
+                new = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_new, reset, CSI, total_orig-total_new, reset, (total_orig/total_new)*100)
+                orig = CSI + "31m%.3fs%s" % (total_orig, reset)
 
-        print "\trencode.pyx: %s" % new
-        print "\trencode.py:  %s" % orig
-        print ""
+            print "\trencode.pyx: %s" % new
+            print "\trencode.py:  %s" % orig
+            print ""
+    else:
+        for f in sys.argv[1:]:
+            do_test(f)
