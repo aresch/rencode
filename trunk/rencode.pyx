@@ -349,11 +349,13 @@ cdef decode_fixed_neg_int(char *data, int *pos):
 
 cdef decode_big_number(char *data, int *pos):
     pos[0] += 1
-    s = ""
-    while (data[pos[0]] != CHR_TERM):
-        s += chr(data[pos[0]])
-        pos[0] += 1
-    pos[0] += 1
+    cdef int x = 18
+    while (data[pos[0]+x] != CHR_TERM):
+        x += 1
+    cdef char *s = <char *>malloc(x)
+    memcpy(s, &data[pos[0]], x)
+    s[x] = '\0'
+    pos[0] += x + 1
     return int(s)
 
 cdef decode_float32(char *data, int *pos):
@@ -385,7 +387,7 @@ cdef decode_fixed_str(char *data, int *pos):
     return s
 
 cdef decode_str(char *data, int *pos):
-    cdef int x = 0
+    cdef int x = 1
     while (data[pos[0]+x] != 58):
         x += 1
     cdef int size = int(data[pos[0]:pos[0]+x])
