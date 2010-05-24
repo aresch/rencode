@@ -206,14 +206,15 @@ cdef encode_float64(char **buf, int *pos, double x):
 
 cdef encode_str(char **buf, int *pos, char* x):
     cdef char *p
-    if len(x) < STR_FIXED_COUNT:
-        write_buffer_char(buf, pos, STR_FIXED_START + len(x))
-        write_buffer(buf, pos, x, len(x))
+    cdef int lx = len(x)
+    if lx < STR_FIXED_COUNT:
+        write_buffer_char(buf, pos, STR_FIXED_START + lx)
+        write_buffer(buf, pos, x, lx)
     else:
-        s = str(len(x)) + ":"
+        s = str(lx) + ":"
         p = s
         write_buffer(buf, pos, p, len(s))
-        write_buffer(buf, pos, x, len(x))
+        write_buffer(buf, pos, x, lx)
 
 cdef encode_none(char **buf, int *pos):
     write_buffer_char(buf, pos, CHR_NONE)
@@ -375,15 +376,15 @@ cdef decode_float64(char *data, int *pos):
     return d
 
 cdef decode_fixed_str(char *data, int *pos):
-    cdef unsigned char size = data[pos[0]]
-    s = data[pos[0]+1:pos[0] + size - STR_FIXED_START + 1]
+    cdef unsigned char size = data[pos[0]] - STR_FIXED_START + 1
+    s = data[pos[0]+1:pos[0] + size]
     try:
         t = s.decode("utf8")
         if len(t) != len(s):
             s = t
     except UnicodeEncodeError:
         pass
-    pos[0] += size - STR_FIXED_START + 1
+    pos[0] += size
     return s
 
 cdef decode_str(char *data, int *pos):
