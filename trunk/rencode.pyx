@@ -311,7 +311,7 @@ def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     return buf[:pos]
 
 cdef decode_char(char *data, int *pos):
-    cdef char c
+    cdef signed char c
     memcpy(&c, &data[pos[0]+1], 1)
     pos[0] += 2
     return c
