@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # test_rencode.py
 #
@@ -72,7 +73,7 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.dumps("f"*255), rencode_orig.dumps("f"*255))
 
     def test_encode_unicode(self):
-        self.assertEqual(rencode.dumps(u"foobar"), rencode_orig.dumps(u"foobar"))
+        self.assertEqual(rencode.dumps(u"fööbar"), rencode_orig.dumps(u"fööbar"))
 
     def test_encode_none(self):
         self.assertEqual(rencode.dumps(None), rencode_orig.dumps(None))
@@ -82,11 +83,11 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.dumps(False), rencode_orig.dumps(False))
 
     def test_encode_fixed_list(self):
-        l = [100, -234.01, "foobar", u"baz"]*4
+        l = [100, -234.01, "foobar", u"bäz"]*4
         self.assertEqual(rencode.dumps(l), rencode_orig.dumps(l))
 
     def test_encode_list(self):
-        l = [100, -234.01, "foobar", u"baz"]*80
+        l = [100, -234.01, "foobar", u"bäz"]*80
         self.assertEqual(rencode.dumps(l), rencode_orig.dumps(l))
 
     def test_encode_fixed_dict(self):
@@ -140,7 +141,7 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.loads(rencode.dumps("f"*255)), "f"*255)
 
     def test_decode_unicode(self):
-        self.assertEqual(rencode.loads(rencode.dumps(u"foobar")), u"foobar")
+        self.assertEqual(rencode.loads(rencode.dumps(u"fööbar")), u"fööbar")
 
     def test_decode_none(self):
         self.assertEqual(rencode.loads(rencode.dumps(None)), None)
@@ -150,11 +151,11 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.loads(rencode.dumps(False)), False)
 
     def test_decode_fixed_list(self):
-        l = [100, False, "foobar", u"baz"]*4
+        l = [100, False, "foobar", u"bäz"]*4
         self.assertEqual(rencode.loads(rencode.dumps(l)), l)
 
     def test_decode_list(self):
-        l = [100, False, "foobar", u"baz"]*80
+        l = [100, False, "foobar", u"bäz"]*80
         self.assertEqual(rencode.loads(rencode.dumps(l)), l)
 
     def test_decode_fixed_dict(self):
