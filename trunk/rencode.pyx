@@ -378,14 +378,8 @@ cdef decode_float64(char *data, int *pos):
 cdef decode_fixed_str(char *data, int *pos):
     cdef unsigned char size = data[pos[0]] - STR_FIXED_START + 1
     s = data[pos[0]+1:pos[0] + size]
-    try:
-        t = s.decode("utf8")
-        if len(t) != len(s):
-            s = t
-    except UnicodeEncodeError:
-        pass
     pos[0] += size
-    return s
+    return s.decode("utf8")
 
 cdef decode_str(char *data, int *pos):
     cdef int x = 1
@@ -398,13 +392,8 @@ cdef decode_str(char *data, int *pos):
     memcpy(s, &data[pos[0]], size)
     s[size] = '\0'
     pos[0] += size
-    try:
-        t = s.decode("utf8")
-        if len(t) != len(s):
-            s = t
-    except UnicodeEncodeError:
-        pass
-    return s
+
+    return s.decode("utf8")
 
 cdef decode_fixed_list(char *data, int *pos):
     l = []
