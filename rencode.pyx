@@ -402,7 +402,7 @@ cdef decode_fixed_list(char *data, int *pos):
     cdef int i
     for i in range(size):
         l.append(decode(data, pos))
-    return l
+    return tuple(l)
 
 cdef decode_list(char *data, int *pos):
     l = []
@@ -410,7 +410,7 @@ cdef decode_list(char *data, int *pos):
     while data[pos[0]] != CHR_TERM:
         l.append(decode(data, pos))
     pos[0] += 1
-    return l
+    return tuple(l)
 
 cdef decode_fixed_dict(char *data, int *pos):
     d = {}
