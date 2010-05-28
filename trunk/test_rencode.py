@@ -152,11 +152,11 @@ class TestRencode(unittest.TestCase):
 
     def test_decode_fixed_list(self):
         l = [100, False, "foobar", u"bäz"]*4
-        self.assertEqual(rencode.loads(rencode.dumps(l)), l)
+        self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
 
     def test_decode_list(self):
         l = [100, False, "foobar", u"bäz"]*80
-        self.assertEqual(rencode.loads(rencode.dumps(l)), l)
+        self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
 
     def test_decode_fixed_dict(self):
         s = "abcdefghijk"
