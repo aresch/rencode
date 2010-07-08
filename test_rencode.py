@@ -165,8 +165,9 @@ class TestRencode(unittest.TestCase):
 
     def test_decode_dict(self):
         s = "abcdefghijklmnopqrstuvwxyz1234567890"
-        d = dict(zip(s, [1234]*len(s)))
-        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
+        d = dict(zip(s, ["foo"*120]*len(s)))
+        d2 = {"foo": d, "bar": d, "baz": d}
+        self.assertEqual(rencode.loads(rencode.dumps(d2)), d2)
 
 if __name__ == '__main__':
     unittest.main()
