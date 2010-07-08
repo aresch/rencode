@@ -385,14 +385,14 @@ cdef decode_str(char *data, int *pos):
     cdef int x = 1
     while (data[pos[0]+x] != 58):
         x += 1
+
     cdef int size = int(data[pos[0]:pos[0]+x])
     pos[0] += x + 1
 
-    cdef char *s = <char *>malloc(size)
+    cdef char *s = <char *>malloc(size+1)
     memcpy(s, &data[pos[0]], size)
     s[size] = '\0'
     pos[0] += size
-
     return s.decode("utf8")
 
 cdef decode_fixed_list(char *data, int *pos):
