@@ -362,7 +362,7 @@ cdef decode_big_number(char *data, int *pos):
 cdef decode_float32(char *data, int *pos):
     cdef float f
     memcpy(&f, &data[pos[0]+1], 4)
-    pos[0] += pos[0] + 5
+    pos[0] += 5
     if not big_endian:
         f = swap_byte_order_float(<char*>&f)
     return f
@@ -370,7 +370,7 @@ cdef decode_float32(char *data, int *pos):
 cdef decode_float64(char *data, int *pos):
     cdef double d
     memcpy(&d, &data[pos[0]+1], 8)
-    pos[0] += pos[0] + 9
+    pos[0] += 9
     if not big_endian:
         d = swap_byte_order_double(<char*>&d)
     return d
