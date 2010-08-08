@@ -28,6 +28,8 @@ cdef extern from "stdlib.h":
     void *realloc(void*, size_t)
     void *malloc(size_t)
 
+cdef long long data_length = 0
+
 # Determine host byte-order
 cdef bool big_endian = False
 cdef unsigned long number = 1
@@ -434,6 +436,9 @@ cdef decode_dict(char *data, int *pos):
     return d
 
 cdef decode(char *data, int *pos):
+    if pos[0] > data_length:
+        raise ValueError("Malformed rencoded string!")
+
     cdef unsigned char typecode = data[pos[0]]
     if typecode == CHR_INT1:
         return decode_char(data, pos)
@@ -484,4 +489,6 @@ def loads(data):
 
     """
     cdef int pos = 0
+    global data_length
+    data_length = len(data)
     return decode(data, &pos)
