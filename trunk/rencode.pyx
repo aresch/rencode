@@ -22,11 +22,9 @@
 #     Boston, MA  02110-1301, USA.
 #
 
-cdef extern from "string.h":
-    void *memcpy(void*, void*, size_t)
-cdef extern from "stdlib.h":
-    void *realloc(void*, size_t)
-    void *malloc(size_t)
+from cpython cimport bool
+from libc.stdlib cimport realloc, malloc
+from libc.string cimport memcpy
 
 cdef long long data_length = 0
 
