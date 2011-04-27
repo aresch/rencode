@@ -3,14 +3,14 @@
 #
 # Copyright (C) 2010 Andrew Resch <andrewresch@gmail.com>
 #
-# Deluge is free software.
+# rencode is free software.
 #
 # You may redistribute it and/or modify it under the terms of the
 # GNU General Public License, as published by the Free Software
 # Foundation; either version 3 of the License, or (at your option)
 # any later version.
 #
-# deluge is distributed in the hope that it will be useful,
+# rencode is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 # See the GNU General Public License for more details.
@@ -23,7 +23,7 @@
 #
 
 from cpython cimport bool
-from libc.stdlib cimport realloc, malloc
+from libc.stdlib cimport realloc, malloc, free
 from libc.string cimport memcpy
 
 cdef long long data_length = 0
@@ -308,7 +308,9 @@ def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     cdef char *buf = NULL
     cdef int pos = 0
     encode(&buf, &pos, data)
-    return buf[:pos]
+    ret = buf[:pos]
+    free(buf)
+    return ret
 
 cdef decode_char(char *data, int *pos):
     cdef signed char c
