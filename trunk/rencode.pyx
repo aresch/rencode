@@ -359,7 +359,9 @@ cdef decode_big_number(char *data, int *pos):
     memcpy(s, &data[pos[0]], x)
     s[x] = '\0'
     pos[0] += x + 1
-    return int(s)
+    big_number = int(s)
+    free(s)
+    return big_number
 
 cdef decode_float32(char *data, int *pos):
     cdef float f
@@ -395,7 +397,9 @@ cdef decode_str(char *data, int *pos):
     memcpy(s, &data[pos[0]], size)
     s[size] = '\0'
     pos[0] += size
-    return s.decode("utf8")
+    encoded = s.decode("utf8")
+    free(s)
+    return encoded
 
 cdef decode_fixed_list(char *data, int *pos):
     l = []
