@@ -23,8 +23,8 @@
 #     Boston, MA  02110-1301, USA.
 #
 
-import rencode
-import rencode_orig
+from rencode import _rencode as rencode
+from rencode import rencode_orig
 
 # Encode functions
 
