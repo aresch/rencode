@@ -71,6 +71,7 @@ class TestRencode(unittest.TestCase):
 
     def test_encode_str(self):
         self.assertEqual(rencode.dumps("f"*255), rencode_orig.dumps("f"*255))
+        self.assertEqual(rencode.dumps("\0"), rencode_orig.dumps("\0"))
 
     def test_encode_unicode(self):
         self.assertEqual(rencode.dumps(u"fööbar"), rencode_orig.dumps(u"fööbar"))
