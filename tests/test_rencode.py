@@ -142,7 +142,7 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.loads(rencode.dumps("f"*255)), "f"*255)
 
     def test_decode_unicode(self):
-        self.assertEqual(rencode.loads(rencode.dumps(u"fööbar")), u"fööbar")
+        self.assertEqual(rencode.loads(rencode.dumps(u"fööbar")), u"fööbar".encode("utf8"))
 
     def test_decode_none(self):
         self.assertEqual(rencode.loads(rencode.dumps(None)), None)
@@ -152,11 +152,11 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.loads(rencode.dumps(False)), False)
 
     def test_decode_fixed_list(self):
-        l = [100, False, "foobar", u"bäz"]*4
+        l = [100, False, "foobar", u"bäz".encode("utf8")]*4
         self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
 
     def test_decode_list(self):
-        l = [100, False, "foobar", u"bäz"]*80
+        l = [100, False, "foobar", u"bäz".encode("utf8")]*80
         self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
 
     def test_decode_fixed_dict(self):
@@ -169,6 +169,16 @@ class TestRencode(unittest.TestCase):
         d = dict(zip(s, ["foo"*120]*len(s)))
         d2 = {"foo": d, "bar": d, "baz": d}
         self.assertEqual(rencode.loads(rencode.dumps(d2)), d2)
+
+    def test_decode_str_bytes(self):
+        b = [202, 132, 100, 114, 97, 119, 1, 0, 0, 63, 1, 242, 63]
+        d = str(bytearray(b))
+        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
+
+    def test_decode_str_nullbytes(self):
+        b = (202, 132, 100, 114, 97, 119, 1, 0, 0, 63, 1, 242, 63, 1, 60, 132, 120, 50, 54, 52, 49, 51, 48, 58, 0, 0, 0, 1, 65, 154, 35, 215, 48, 204, 4, 35, 242, 3, 122, 218, 67, 192, 127, 40, 241, 127, 2, 86, 240, 63, 135, 177, 23, 119, 63, 31, 226, 248, 19, 13, 192, 111, 74, 126, 2, 15, 240, 31, 239, 48, 85, 238, 159, 155, 197, 241, 23, 119, 63, 2, 23, 245, 63, 24, 240, 86, 36, 176, 15, 187, 185, 248, 242, 255, 0, 126, 123, 141, 206, 60, 188, 1, 27, 254, 141, 169, 132, 93, 220, 252, 121, 184, 8, 31, 224, 63, 244, 226, 75, 224, 119, 135, 229, 248, 3, 243, 248, 220, 227, 203, 193, 3, 224, 127, 47, 134, 59, 5, 99, 249, 254, 35, 196, 127, 17, 252, 71, 136, 254, 35, 196, 112, 4, 177, 3, 63, 5, 220)
+        d = str(bytearray(b))
+        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
 
 if __name__ == '__main__':
     unittest.main()
