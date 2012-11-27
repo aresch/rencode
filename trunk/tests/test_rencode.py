@@ -180,5 +180,11 @@ class TestRencode(unittest.TestCase):
         d = str(bytearray(b))
         self.assertEqual(rencode.loads(rencode.dumps(d)), d)
 
+    def test_decode_utf8(self):
+        s = "foobarbaz"
+        self.assertIsInstance(rencode.loads(rencode.dumps(s), decode_utf8=True), unicode)
+        s = rencode.dumps("\x56\xe4foo\xc3")
+        self.assertRaises(UnicodeDecodeError, rencode.loads, s, decode_utf8=True)
+        
 if __name__ == '__main__':
     unittest.main()
