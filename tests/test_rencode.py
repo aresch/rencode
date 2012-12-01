@@ -25,7 +25,7 @@
 
 import unittest
 from rencode import _rencode as rencode
-from rencode import rencode_orig
+import rencode_orig
 
 class TestRencode(unittest.TestCase):
     def test_encode_fixed_pos_int(self):
