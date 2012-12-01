@@ -72,7 +72,7 @@ pure Python module written by Petru Paler, Connelly Barnes et al.
 
 setup(
   name="rencode",
-  version="2.0",
+  version="1.0.2",
   packages=["rencode"],
   description=description,
   author="Andrew Resch",
