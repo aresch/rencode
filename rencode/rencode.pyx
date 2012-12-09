@@ -22,6 +22,13 @@
 #     Boston, MA  02110-1301, USA.
 #
 
+import sys
+
+py3 = False
+if sys.version_info.major >= 3:
+    py3 = True
+    unicode = str
+    
 from cpython cimport bool
 from libc.stdlib cimport realloc, malloc, free
 from libc.string cimport memcpy
@@ -215,6 +222,8 @@ cdef encode_str(char **buf, int *pos, bytes x):
         write_buffer(buf, pos, <char *>x, lx)
     else:
         s = str(lx) + ":"
+        if py3:
+            s = s.encode("ascii")
         p = s
         write_buffer(buf, pos, p, len(s))
         write_buffer(buf, pos, <char *>x, lx)
@@ -242,21 +251,19 @@ cdef encode_list(char **buf, int *pos, x):
 cdef encode_dict(char **buf, int *pos, x):
     if len(x) < DICT_FIXED_COUNT:
         write_buffer_char(buf, pos, DICT_FIXED_START + len(x))
-        for k, v in x.iteritems():
+        for k, v in x.items():
             encode(buf, pos, k)
             encode(buf, pos, v)
     else:
         write_buffer_char(buf, pos, CHR_DICT)
-        for k, v in x.iteritems():
+        for k, v in x.items():
             encode(buf, pos, k)
             encode(buf, pos, v)
         write_buffer_char(buf, pos, CHR_TERM)
 
-from types import StringType, IntType, LongType, DictType, ListType, TupleType, FloatType, NoneType, UnicodeType, BooleanType
-
 cdef encode(char **buf, int *pos, data):
     t = type(data)
-    if t == IntType or t == LongType:
+    if t == int or t == long:
         if -128 <= data < 128:
             encode_char(buf, pos, data)
         elif -32768 <= data < 32768:
@@ -267,10 +274,12 @@ cdef encode(char **buf, int *pos, data):
             encode_long_long(buf, pos, data)
         else:
             s = str(data)
+            if py3:
+                s = s.encode("ascii")
             if len(s) >= MAX_INT_LENGTH:
                 raise ValueError("Number is longer than %d characters" % MAX_INT_LENGTH)
             encode_big_number(buf, pos, s)
-    elif t == FloatType:
+    elif t == float:
         if _float_bits == 32:
             encode_float32(buf, pos, data)
         elif _float_bits == 64:
@@ -278,23 +287,23 @@ cdef encode(char **buf, int *pos, data):
         else:
             raise ValueError('Float bits (%d) is not 32 or 64' % _float_bits)
 
-    elif t == StringType:
+    elif t == bytes:
         encode_str(buf, pos, data)
 
-    elif t == UnicodeType:
+    elif t == unicode:
         u = data.encode("utf8")
         encode_str(buf, pos, u)
 
-    elif t == NoneType:
+    elif t == type(None):
         encode_none(buf, pos)
 
-    elif t == BooleanType:
+    elif t == bool:
         encode_bool(buf, pos, data)
 
-    elif t == ListType or t == TupleType:
+    elif t == list or t == tuple:
         encode_list(buf, pos, data)
 
-    elif t == DictType:
+    elif t == dict:
         encode_dict(buf, pos, data)
 
 
