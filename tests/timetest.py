@@ -26,6 +26,17 @@
 from rencode import _rencode as rencode
 from rencode import rencode_orig
 
+import sys
+# Hack to deal with python 2 and 3 differences with unicode literals.
+if sys.version < '3':
+    import codecs
+    def u(x):
+        return codecs.unicode_escape_decode(x)[0]
+else:
+    unicode = str
+    def u(x):
+        return x
+        
 # Encode functions
 
 def test_encode_fixed_pos_int():
@@ -92,12 +103,12 @@ def test_encode_float_64bit_orig():
     rencode_orig.dumps(1234.56, 64)
 
 def test_encode_fixed_str():
-    rencode.dumps("foobarbaz")
+    rencode.dumps(b"foobarbaz")
 
 def test_encode_fixed_str_orig():
-    rencode_orig.dumps("foobarbaz")
+    rencode_orig.dumps(b"foobarbaz")
 
-s = "f"*255
+s = b"f"*255
 def test_encode_str():
     rencode.dumps(s)
 
@@ -130,7 +141,7 @@ def test_encode_list():
 def test_encode_list_orig():
     rencode_orig.dumps(ll)
 
-keys = "abcdefghijk"
+keys = b"abcdefghijk"
 d = dict(zip(keys, [None]*len(keys)))
 
 def test_encode_fixed_dict():
@@ -139,7 +150,7 @@ def test_encode_fixed_dict():
 def test_encode_fixed_dict_orig():
     rencode_orig.dumps(d)
 
-keys2 = "abcdefghijklmnopqrstuvwxyz1234567890"
+keys2 = b"abcdefghijklmnopqrstuvwxyz1234567890"
 d2 = dict(zip(keys2, [None]*len(keys2)))
 
 def test_encode_dict():
@@ -152,122 +163,121 @@ def test_encode_dict_orig():
 # Decode functions
 
 def test_decode_fixed_pos_int():
-    rencode.loads('(')
+    rencode.loads(b'(')
 
 def test_decode_fixed_pos_int_orig():
-    rencode_orig.loads('(')
+    rencode_orig.loads(b'(')
 
 def test_decode_fixed_neg_int():
-    rencode.loads('b')
+    rencode.loads(b'b')
 
 def test_decode_fixed_neg_int_orig():
-    rencode_orig.loads('b')
+    rencode_orig.loads(b'b')
 
 def test_decode_int_char_size():
-    rencode.loads('>d')
-    rencode.loads('>\x9c')
+    rencode.loads(b'>d')
+    rencode.loads(b'>\x9c')
 
 def test_decode_int_char_size_orig():
-    rencode_orig.loads('>d')
-    rencode_orig.loads('>\x9c')
+    rencode_orig.loads(b'>d')
+    rencode_orig.loads(b'>\x9c')
 
 def test_decode_int_short_size():
-    rencode.loads('?i\xf3')
-    rencode.loads('?\x96\r')
+    rencode.loads(b'?i\xf3')
+    rencode.loads(b'?\x96\r')
 
 def test_decode_int_short_size_orig():
-    rencode_orig.loads('?i\xf3')
-    rencode_orig.loads('?\x96\r')
+    rencode_orig.loads(b'?i\xf3')
+    rencode_orig.loads(b'?\x96\r')
 
 def test_decode_int_int_size():
-    rencode.loads('@\x00r1\x00')
-    rencode.loads('@\xff\x8d\xcf\x00')
+    rencode.loads(b'@\x00r1\x00')
+    rencode.loads(b'@\xff\x8d\xcf\x00')
 
 def test_decode_int_int_size_orig():
-    rencode_orig.loads('@\x00r1\x00')
-    rencode_orig.loads('@\xff\x8d\xcf\x00')
+    rencode_orig.loads(b'@\x00r1\x00')
+    rencode_orig.loads(b'@\xff\x8d\xcf\x00')
 
 def test_decode_int_long_long_size():
-    rencode.loads('Ar\x1fILX\x9c\x00\x00')
-    rencode.loads('A\x8d\xe0\xb6\xb3\xa7d\x00\x00')
+    rencode.loads(b'Ar\x1fILX\x9c\x00\x00')
+    rencode.loads(b'A\x8d\xe0\xb6\xb3\xa7d\x00\x00')
 
 def test_decode_int_long_long_size_orig():
-    rencode_orig.loads('Ar\x1fILX\x9c\x00\x00')
-    rencode_orig.loads('A\x8d\xe0\xb6\xb3\xa7d\x00\x00')
+    rencode_orig.loads(b'Ar\x1fILX\x9c\x00\x00')
+    rencode_orig.loads(b'A\x8d\xe0\xb6\xb3\xa7d\x00\x00')
 
 def test_decode_int_big_number():
-    rencode.loads('=99999999999999999999999999999999999999999999999999999999999999\x7f')
+    rencode.loads(b'=99999999999999999999999999999999999999999999999999999999999999\x7f')
 
 def test_decode_int_big_number_orig():
-    rencode_orig.loads('=99999999999999999999999999999999999999999999999999999999999999\x7f')
+    rencode_orig.loads(b'=99999999999999999999999999999999999999999999999999999999999999\x7f')
 
 def test_decode_float_32bit():
-    rencode.loads('BD\x9aQ\xec')
+    rencode.loads(b'BD\x9aQ\xec')
 
 def test_decode_float_32bit_orig():
-    rencode_orig.loads('BD\x9aQ\xec')
+    rencode_orig.loads(b'BD\x9aQ\xec')
 
 def test_decode_float_64bit():
-    rencode.loads(',@\x93J=p\xa3\xd7\n')
+    rencode.loads(b',@\x93J=p\xa3\xd7\n')
 
 def test_decode_float_64bit_orig():
-    rencode_orig.loads(',@\x93J=p\xa3\xd7\n')
+    rencode_orig.loads(b',@\x93J=p\xa3\xd7\n')
 
 def test_decode_fixed_str():
-    rencode.loads('\x89foobarbaz')
+    rencode.loads(b'\x89foobarbaz')
 
 def test_decode_fixed_str_orig():
-    rencode_orig.loads('\x89foobarbaz')
+    rencode_orig.loads(b'\x89foobarbaz')
 
-s = "f"*255
 def test_decode_str():
-    rencode.loads('255:fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
+    rencode.loads(b'255:fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
 
 def test_decode_str_orig():
-    rencode_orig.loads('255:fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
+    rencode_orig.loads(b'255:fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
 
 def test_decode_none():
-    rencode.loads('E')
+    rencode.loads(b'E')
 
 def test_decode_none_orig():
-    rencode_orig.loads('E')
+    rencode_orig.loads(b'E')
 
 def test_decode_bool():
-    rencode.loads('C')
+    rencode.loads(b'C')
 
 def test_decode_bool_orig():
-    rencode_orig.loads('C')
+    rencode_orig.loads(b'C')
 
 def test_decode_fixed_list():
-    rencode.loads('\xc4EEEE')
+    rencode.loads(b'\xc4EEEE')
 
 def test_decode_fixed_list_orig():
-    rencode_orig.loads('\xc4EEEE')
+    rencode_orig.loads(b'\xc4EEEE')
 
 def test_decode_list():
-    rencode.loads(';EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\x7f')
+    rencode.loads(b';EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\x7f')
 
 def test_decode_list_orig():
-    rencode_orig.loads(';EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\x7f')
+    rencode_orig.loads(b';EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\x7f')
 
 def test_decode_fixed_dict():
-    rencode.loads('q\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE')
+    rencode.loads(b'q\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE')
 
 def test_decode_fixed_dict_orig():
-    rencode_orig.loads('q\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE')
+    rencode_orig.loads(b'q\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE')
 
 def test_decode_dict():
-    rencode.loads('<\x811E\x810E\x813E\x812E\x815E\x814E\x817E\x816E\x819E\x818E\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE\x81mE\x81lE\x81oE\x81nE\x81qE\x81pE\x81sE\x81rE\x81uE\x81tE\x81wE\x81vE\x81yE\x81xE\x81zE\x7f')
+    rencode.loads(b'<\x811E\x810E\x813E\x812E\x815E\x814E\x817E\x816E\x819E\x818E\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE\x81mE\x81lE\x81oE\x81nE\x81qE\x81pE\x81sE\x81rE\x81uE\x81tE\x81wE\x81vE\x81yE\x81xE\x81zE\x7f')
 
 def test_decode_dict_orig():
-    rencode_orig.loads('<\x811E\x810E\x813E\x812E\x815E\x814E\x817E\x816E\x819E\x818E\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE\x81mE\x81lE\x81oE\x81nE\x81qE\x81pE\x81sE\x81rE\x81uE\x81tE\x81wE\x81vE\x81yE\x81xE\x81zE\x7f')
+    rencode_orig.loads(b'<\x811E\x810E\x813E\x812E\x815E\x814E\x817E\x816E\x819E\x818E\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE\x81mE\x81lE\x81oE\x81nE\x81qE\x81pE\x81sE\x81rE\x81uE\x81tE\x81wE\x81vE\x81yE\x81xE\x81zE\x7f')
 
 
 overall = [
-    "5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
-    "fixedlength",
-    u"unicodestring",
-    u"5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
+    b"5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
+    b"fixedlength",
+    u("unicodestring"),
+    u("5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6"),
     -10,
     10,
     120,
@@ -308,7 +318,7 @@ if __name__ == "__main__":
     reset=CSI+"m"
 
     def do_test(func):
-        print "%s:" % func
+        print("%s:" % func)
         new_time = timeit.Timer("%s()" % func, "from __main__ import %s" % func).timeit(iterations)
         orig_time = timeit.Timer("%s_orig()" % func, "from __main__ import %s_orig" % func).timeit(iterations)
         if new_time > orig_time:
@@ -318,19 +328,19 @@ if __name__ == "__main__":
             new = CSI + "32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (new_time, reset, CSI, orig_time-new_time, reset, (orig_time/new_time)*100)
             orig = CSI + "31m%.3fs%s" % (orig_time, reset)
 
-        print "\trencode.pyx: %s" % new
-        print "\trencode.py:  %s" % orig
-        print ""
+        print("\trencode.pyx: %s" % new)
+        print("\trencode.py:  %s" % orig)
+        print("")
         return (new_time, orig_time)
 
     if len(sys.argv) == 1:
-        loc = locals().keys()
+        loc = list(locals().keys())
 
         for t in ("encode", "decode", "overall"):
-            print "*" * 79
-            print "%s functions:" % (t.title())
-            print "*" * 79
-            print ""
+            print("*" * 79)
+            print("%s functions:" % (t.title()))
+            print("*" * 79)
+            print("")
 
             total_new = 0.0
             total_orig = 0.0
@@ -340,7 +350,7 @@ if __name__ == "__main__":
                     total_new += n
                     total_orig += o
 
-            print "%s functions totals:" % (t.title())
+            print("%s functions totals:" % (t.title()))
             if total_new > total_orig:
                 new = CSI + "31m%.3fs%s" % (total_new, reset)
                 orig = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_orig, reset, CSI, total_new-total_orig, reset, (total_new/total_orig)*100)
@@ -348,9 +358,9 @@ if __name__ == "__main__":
                 new = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (CSI, total_new, reset, CSI, total_orig-total_new, reset, (total_orig/total_new)*100)
                 orig = CSI + "31m%.3fs%s" % (total_orig, reset)
 
-            print "\trencode.pyx: %s" % new
-            print "\trencode.py:  %s" % orig
-            print ""
+            print("\trencode.pyx: %s" % new)
+            print("\trencode.py:  %s" % orig)
+            print("")
     else:
         for f in sys.argv[1:]:
             do_test(f)
