@@ -1,6 +1,5 @@
 #rencode
 
-##Overview
 The rencode module is similar to bencode from the BitTorrent project.  For complex, heterogeneous data structures with many small elements, r-encodings take up significantly less space than b-encodings:
 
 ```
