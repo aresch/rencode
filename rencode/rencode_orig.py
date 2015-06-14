@@ -194,13 +194,13 @@ def decode_dict(x, f):
     return (r, f + 1)
 
 def decode_true(x, f):
-  return (True, f+1)
+    return (True, f+1)
 
 def decode_false(x, f):
-  return (False, f+1)
+    return (False, f+1)
 
 def decode_none(x, f):
-  return (None, f+1)
+    return (None, f+1)
 
 decode_func = {}
 decode_func[b'0'] = decode_string
@@ -307,7 +307,7 @@ def encode_int(x, r):
         s = str(x)
         if py3:
             s = bytes(s, "ascii")
-            
+
         if len(s) >= MAX_INT_LENGTH:
             raise ValueError('overflow')
         r.extend((CHR_INT, s, CHR_TERM))
@@ -431,4 +431,4 @@ except ImportError:
 
 
 if __name__ == '__main__':
-  test()
+    test()
