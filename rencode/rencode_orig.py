@@ -243,7 +243,7 @@ def make_fixed_length_list_decoders():
     def make_decoder(slen):
         def f(x, f):
             r, f = [], f+1
-            for i in range(slen):
+            for _ in range(slen):
                 v, f = decode_func[x[f:f+1]](x, f)
                 r.append(v)
             return (tuple(r), f)
@@ -269,7 +269,7 @@ def make_fixed_length_dict_decoders():
     def make_decoder(slen):
         def f(x, f):
             r, f = {}, f+1
-            for j in range(slen):
+            for _ in range(slen):
                 k, f = decode_func[x[f:f+1]](x, f)
                 r[k], f = decode_func[x[f:f+1]](x, f)
             return (r, f)
