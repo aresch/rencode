@@ -310,7 +310,6 @@ def test_overall_decode_orig():
 
 if __name__ == "__main__":
     import timeit
-    import sys
 
     iterations = 10000
     # ANSI escape codes
