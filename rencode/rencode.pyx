@@ -24,16 +24,15 @@
 
 import sys
 
-py3 = False
-if sys.version_info.major >= 3:
-    py3 = True
+py3 = sys.version_info[0] >= 3
+if py3:
     unicode = str
-    
+
 from cpython cimport bool
 from libc.stdlib cimport realloc, malloc, free
 from libc.string cimport memcpy
 
-__version__ = "1.0.2"
+__version__ = ("Cython", 1, 0, 3)
 
 cdef long long data_length = 0
 cdef bool _decode_utf8 = False
@@ -261,6 +260,13 @@ cdef encode_dict(char **buf, int *pos, x):
             encode(buf, pos, v)
         write_buffer_char(buf, pos, CHR_TERM)
 
+cdef object MAX_SIGNED_INT = 2**31
+cdef object MIN_SIGNED_INT = -MAX_SIGNED_INT
+#note: negating the Python value avoids compiler problems
+#(negating the "long long" constant can make it unsigned with some compilers!)
+cdef object MAX_SIGNED_LONGLONG = int(2**63)
+cdef object MIN_SIGNED_LONGLONG = -MAX_SIGNED_LONGLONG
+
 cdef encode(char **buf, int *pos, data):
     t = type(data)
     if t == int or t == long:
@@ -268,9 +274,9 @@ cdef encode(char **buf, int *pos, data):
             encode_char(buf, pos, data)
         elif -32768 <= data < 32768:
             encode_short(buf, pos, data)
-        elif -2147483648 <= data < 2147483648:
+        elif MIN_SIGNED_INT <= data < MAX_SIGNED_INT:
             encode_int(buf, pos, data)
-        elif -9223372036854775808 <= data < 9223372036854775808:
+        elif MIN_SIGNED_LONGLONG <= data < MAX_SIGNED_LONGLONG:
             encode_long_long(buf, pos, data)
         else:
             s = str(data)
@@ -306,6 +312,8 @@ cdef encode(char **buf, int *pos, data):
     elif t == dict:
         encode_dict(buf, pos, data)
 
+    else:
+        raise Exception("type %s not handled" % t)
 
 def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     """

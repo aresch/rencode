@@ -19,7 +19,7 @@ rencode module versions, so you should check that you are using the
 same rencode version throughout your project.
 """
 
-__version__ = '1.0.2'
+__version__ = ("Python", 1, 0, 3)
 __all__ = ['dumps', 'loads']
 
 # Original bencode module by Petru Paler, et al.
@@ -64,18 +64,16 @@ __all__ = ['dumps', 'loads']
 
 import sys
 
-py3 = False
-if sys.version_info.major >= 3:
-    py3 = True
+py3 = sys.version_info[0] >= 3
+if py3:
     long = int
     unicode = str
-    
-def int2byte(c):
-    if py3:
+    def int2byte(c):
         return bytes([c])
-    else:
+else:
+    def int2byte(c):
         return chr(c)
-       
+
 import struct
 from threading import Lock
 
@@ -196,13 +194,13 @@ def decode_dict(x, f):
     return (r, f + 1)
 
 def decode_true(x, f):
-  return (True, f+1)
+    return (True, f+1)
 
 def decode_false(x, f):
-  return (False, f+1)
+    return (False, f+1)
 
 def decode_none(x, f):
-  return (None, f+1)
+    return (None, f+1)
 
 decode_func = {}
 decode_func[b'0'] = decode_string
@@ -245,7 +243,7 @@ def make_fixed_length_list_decoders():
     def make_decoder(slen):
         def f(x, f):
             r, f = [], f+1
-            for i in range(slen):
+            for _ in range(slen):
                 v, f = decode_func[x[f:f+1]](x, f)
                 r.append(v)
             return (tuple(r), f)
@@ -271,7 +269,7 @@ def make_fixed_length_dict_decoders():
     def make_decoder(slen):
         def f(x, f):
             r, f = {}, f+1
-            for j in range(slen):
+            for _ in range(slen):
                 k, f = decode_func[x[f:f+1]](x, f)
                 r[k], f = decode_func[x[f:f+1]](x, f)
             return (r, f)
@@ -309,7 +307,7 @@ def encode_int(x, r):
         s = str(x)
         if py3:
             s = bytes(s, "ascii")
-            
+
         if len(s) >= MAX_INT_LENGTH:
             raise ValueError('overflow')
         r.extend((CHR_INT, s, CHR_TERM))
@@ -381,8 +379,7 @@ def dumps(x, float_bits=DEFAULT_FLOAT_BITS):
 
     Here float_bits is either 32 or 64.
     """
-    lock.acquire()
-    try:
+    with lock:
         if float_bits == 32:
             encode_func[float] = encode_float32
         elif float_bits == 64:
@@ -391,9 +388,6 @@ def dumps(x, float_bits=DEFAULT_FLOAT_BITS):
             raise ValueError('Float bits (%d) is not 32 or 64' % float_bits)
         r = []
         encode_func[type(x)](x, r)
-    finally:
-        lock.release()
-        
     return b''.join(r)
 
 def test():
@@ -433,4 +427,4 @@ except ImportError:
 
 
 if __name__ == '__main__':
-  test()
+    test()
