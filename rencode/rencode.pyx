@@ -24,11 +24,10 @@
 
 import sys
 
-py3 = False
-if sys.version_info.major >= 3:
-    py3 = True
+py3 = sys.version >= '3'
+if py3:
     unicode = str
-    
+
 from cpython cimport bool
 from libc.stdlib cimport realloc, malloc, free
 from libc.string cimport memcpy

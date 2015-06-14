@@ -64,18 +64,16 @@ __all__ = ['dumps', 'loads']
 
 import sys
 
-py3 = False
-if sys.version_info.major >= 3:
-    py3 = True
-    long = int
-    unicode = str
-    
-def int2byte(c):
-    if py3:
+py3 = sys.version >= '3'
+if py3:
+    long = int          #@ReservedAssignment
+    unicode = str       #@ReservedAssignment
+    def int2byte(c):
         return bytes([c])
-    else:
+else:
+    def int2byte(c):
         return chr(c)
-       
+
 import struct
 from threading import Lock
 
