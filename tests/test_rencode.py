@@ -202,6 +202,11 @@ class TestRencode(unittest.TestCase):
             self.fail('%s is not an instance of %r' % (repr(d), unicode))
         s = rencode.dumps(b"\x56\xe4foo\xc3")
         self.assertRaises(UnicodeDecodeError, rencode.loads, s, decode_utf8=True)
-        
+
+    def test_version_exposed(self):
+        assert rencode.__version__
+        assert rencode_orig.__version__
+        self.assertEqual(rencode.__version__[1:], rencode_orig.__version__[1:], "version number does not match")
+
 if __name__ == '__main__':
     unittest.main()
