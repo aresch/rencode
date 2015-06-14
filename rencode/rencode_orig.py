@@ -66,8 +66,8 @@ import sys
 
 py3 = sys.version >= '3'
 if py3:
-    long = int          #@ReservedAssignment
-    unicode = str       #@ReservedAssignment
+    long = int
+    unicode = str
     def int2byte(c):
         return bytes([c])
 else:
