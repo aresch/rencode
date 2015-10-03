@@ -77,6 +77,7 @@ setup(
   description=description,
   author="Andrew Resch",
   author_email="andrewresch@gmail.com",
+  url="https://github.com/aresch/rencode",
   cmdclass={'build_ext': optional_build_ext},
   ext_modules=ext_modules
 )
