@@ -124,36 +124,45 @@ class TestRencode(unittest.TestCase):
     def test_decode_char(self):
         self.assertEqual(rencode.loads(rencode.dumps(100)), 100)
         self.assertEqual(rencode.loads(rencode.dumps(-100)), -100)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([62])))
 
     def test_decode_short(self):
         self.assertEqual(rencode.loads(rencode.dumps(27123)), 27123)
         self.assertEqual(rencode.loads(rencode.dumps(-27123)), -27123)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([63])))
 
     def test_decode_int(self):
         self.assertEqual(rencode.loads(rencode.dumps(7483648)), 7483648)
         self.assertEqual(rencode.loads(rencode.dumps(-7483648)), -7483648)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([64])))
 
     def test_decode_long_long(self):
         self.assertEqual(rencode.loads(rencode.dumps(8223372036854775808)), 8223372036854775808)
         self.assertEqual(rencode.loads(rencode.dumps(-8223372036854775808)), -8223372036854775808)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([65])))
 
     def test_decode_int_big_number(self):
         n = int(b"9"*62)
         self.assertEqual(rencode.loads(rencode.dumps(n)), n)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([61])))
 
     def test_decode_float_32bit(self):
         f = rencode.dumps(1234.56)
         self.assertEqual(rencode.loads(f), rencode_orig.loads(f))
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([66])))
 
     def test_decode_float_64bit(self):
         f = rencode.dumps(1234.56, 64)
         self.assertEqual(rencode.loads(f), rencode_orig.loads(f))
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([44])))
 
     def test_decode_fixed_str(self):
         self.assertEqual(rencode.loads(rencode.dumps(b"foobarbaz")), b"foobarbaz")
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([130])))
 
     def test_decode_str(self):
         self.assertEqual(rencode.loads(rencode.dumps(b"f"*255)), b"f"*255)
+        self.assertRaises(IndexError, rencode.loads, b"50")
 
     def test_decode_unicode(self):
         self.assertEqual(rencode.loads(rencode.dumps(u("fööbar"))), u("fööbar").encode("utf8"))
@@ -168,21 +177,25 @@ class TestRencode(unittest.TestCase):
     def test_decode_fixed_list(self):
         l = [100, False, b"foobar", u("bäz").encode("utf8")]*4
         self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([194])))
 
     def test_decode_list(self):
         l = [100, False, b"foobar", u("bäz").encode("utf8")]*80
         self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([59])))
 
     def test_decode_fixed_dict(self):
         s = b"abcdefghijk"
         d = dict(zip(s, [1234]*len(s)))
         self.assertEqual(rencode.loads(rencode.dumps(d)), d)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([104])))
 
     def test_decode_dict(self):
         s = b"abcdefghijklmnopqrstuvwxyz1234567890"
         d = dict(zip(s, [b"foo"*120]*len(s)))
         d2 = {b"foo": d, b"bar": d, b"baz": d}
         self.assertEqual(rencode.loads(rencode.dumps(d2)), d2)
+        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([60])))
 
     def test_decode_str_bytes(self):
         b = [202, 132, 100, 114, 97, 119, 1, 0, 0, 63, 1, 242, 63]

@@ -149,17 +149,17 @@ cdef swap_byte_order_double(char *c):
     p[7] = c[0]
     return d
 
-cdef write_buffer_char(char **buf, int *pos, char c):
+cdef write_buffer_char(char **buf, unsigned int *pos, char c):
     buf[0] = <char*>realloc(buf[0], pos[0] + 1)
     memcpy(&buf[0][pos[0]], &c, 1)
     pos[0] += 1
 
-cdef write_buffer(char **buf, int *pos, void* data, int size):
+cdef write_buffer(char **buf, unsigned int *pos, void* data, int size):
     buf[0] = <char*>realloc(buf[0], pos[0] + size)
     memcpy(&buf[0][pos[0]], data, size)
     pos[0] += size
 
-cdef encode_char(char **buf, int *pos, signed char x):
+cdef encode_char(char **buf, unsigned int *pos, signed char x):
     if 0 <= x < INT_POS_FIXED_COUNT:
         write_buffer_char(buf, pos, INT_POS_FIXED_START + x)
     elif -INT_NEG_FIXED_COUNT <= x < 0:
@@ -168,7 +168,7 @@ cdef encode_char(char **buf, int *pos, signed char x):
         write_buffer_char(buf, pos, CHR_INT1)
         write_buffer_char(buf, pos, x)
 
-cdef encode_short(char **buf, int *pos, short x):
+cdef encode_short(char **buf, unsigned int *pos, short x):
     write_buffer_char(buf, pos, CHR_INT2)
     if not big_endian:
         if x > 0:
@@ -178,7 +178,7 @@ cdef encode_short(char **buf, int *pos, short x):
 
     write_buffer(buf, pos, &x, sizeof(x))
 
-cdef encode_int(char **buf, int *pos, int x):
+cdef encode_int(char **buf, unsigned int *pos, int x):
     write_buffer_char(buf, pos, CHR_INT4)
     if not big_endian:
         if x > 0:
@@ -187,7 +187,7 @@ cdef encode_int(char **buf, int *pos, int x):
             x = swap_byte_order_int(<char*>&x)
     write_buffer(buf, pos, &x, sizeof(x))
 
-cdef encode_long_long(char **buf, int *pos, long long x):
+cdef encode_long_long(char **buf, unsigned int *pos, long long x):
     write_buffer_char(buf, pos, CHR_INT8)
     if not big_endian:
         if x > 0:
@@ -196,24 +196,24 @@ cdef encode_long_long(char **buf, int *pos, long long x):
             x = swap_byte_order_long_long(<char*>&x)
     write_buffer(buf, pos, &x, sizeof(x))
 
-cdef encode_big_number(char **buf, int *pos, char *x):
+cdef encode_big_number(char **buf, unsigned int *pos, char *x):
     write_buffer_char(buf, pos, CHR_INT)
     write_buffer(buf, pos, x, len(x))
     write_buffer_char(buf, pos, CHR_TERM)
 
-cdef encode_float32(char **buf, int *pos, float x):
+cdef encode_float32(char **buf, unsigned int *pos, float x):
     write_buffer_char(buf, pos, CHR_FLOAT32)
     if not big_endian:
         x = swap_byte_order_float(<char *>&x)
     write_buffer(buf, pos, &x, sizeof(x))
 
-cdef encode_float64(char **buf, int *pos, double x):
+cdef encode_float64(char **buf, unsigned int *pos, double x):
     write_buffer_char(buf, pos, CHR_FLOAT64)
     if not big_endian:
         x = swap_byte_order_double(<char *>&x)
     write_buffer(buf, pos, &x, sizeof(x))
 
-cdef encode_str(char **buf, int *pos, bytes x):
+cdef encode_str(char **buf, unsigned int *pos, bytes x):
     cdef char *p
     cdef int lx = len(x)
     if lx < STR_FIXED_COUNT:
@@ -227,16 +227,16 @@ cdef encode_str(char **buf, int *pos, bytes x):
         write_buffer(buf, pos, p, len(s))
         write_buffer(buf, pos, <char *>x, lx)
 
-cdef encode_none(char **buf, int *pos):
+cdef encode_none(char **buf, unsigned int *pos):
     write_buffer_char(buf, pos, CHR_NONE)
 
-cdef encode_bool(char **buf, int *pos, bool x):
+cdef encode_bool(char **buf, unsigned int *pos, bool x):
     if x:
         write_buffer_char(buf, pos, CHR_TRUE)
     else:
         write_buffer_char(buf, pos, CHR_FALSE)
 
-cdef encode_list(char **buf, int *pos, x):
+cdef encode_list(char **buf, unsigned int *pos, x):
     if len(x) < LIST_FIXED_COUNT:
         write_buffer_char(buf, pos, LIST_FIXED_START + len(x))
         for i in x:
@@ -247,7 +247,7 @@ cdef encode_list(char **buf, int *pos, x):
             encode(buf, pos, i)
         write_buffer_char(buf, pos, CHR_TERM)
 
-cdef encode_dict(char **buf, int *pos, x):
+cdef encode_dict(char **buf, unsigned int *pos, x):
     if len(x) < DICT_FIXED_COUNT:
         write_buffer_char(buf, pos, DICT_FIXED_START + len(x))
         for k, v in x.items():
@@ -267,7 +267,7 @@ cdef object MIN_SIGNED_INT = -MAX_SIGNED_INT
 cdef object MAX_SIGNED_LONGLONG = int(2**63)
 cdef object MIN_SIGNED_LONGLONG = -MAX_SIGNED_LONGLONG
 
-cdef encode(char **buf, int *pos, data):
+cdef encode(char **buf, unsigned int *pos, data):
     t = type(data)
     if t == int or t == long:
         if -128 <= data < 128:
@@ -326,55 +326,61 @@ def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     global _float_bits
     _float_bits = float_bits
     cdef char *buf = NULL
-    cdef int pos = 0
+    cdef unsigned int pos = 0
     encode(&buf, &pos, data)
     ret = buf[:pos]
     free(buf)
     return ret
 
-cdef decode_char(char *data, int *pos):
+cdef decode_char(char *data, unsigned int *pos):
     cdef signed char c
+    check_pos(data, pos[0]+1)
     memcpy(&c, &data[pos[0]+1], 1)
     pos[0] += 2
     return c
 
-cdef decode_short(char *data, int *pos):
+cdef decode_short(char *data, unsigned int *pos):
     cdef short s
+    check_pos(data, pos[0]+2)
     memcpy(&s, &data[pos[0]+1], 2)
     pos[0] += 3
     if not big_endian:
         s = swap_byte_order_short(<char*>&s)
     return s
 
-cdef decode_int(char *data, int *pos):
+cdef decode_int(char *data, unsigned int *pos):
     cdef int i
+    check_pos(data, pos[0]+4)
     memcpy(&i, &data[pos[0]+1], 4)
     pos[0] += 5
     if not big_endian:
         i = swap_byte_order_int(<char*>&i)
     return i
 
-cdef decode_long_long(char *data, int *pos):
+cdef decode_long_long(char *data, unsigned int *pos):
     cdef long long l
+    check_pos(data, pos[0]+8)
     memcpy(&l, &data[pos[0]+1], 8)
     pos[0] += 9
     if not big_endian:
         l = swap_byte_order_long_long(<char*>&l)
     return l
 
-cdef decode_fixed_pos_int(char *data, int *pos):
+cdef decode_fixed_pos_int(char *data, unsigned int *pos):
     pos[0] += 1
     return data[pos[0] - 1] - INT_POS_FIXED_START
 
-cdef decode_fixed_neg_int(char *data, int *pos):
+cdef decode_fixed_neg_int(char *data, unsigned int *pos):
     pos[0] += 1
     return (data[pos[0] - 1] - INT_NEG_FIXED_START + 1)*-1
 
-cdef decode_big_number(char *data, int *pos):
+cdef decode_big_number(char *data, unsigned int *pos):
     pos[0] += 1
     cdef int x = 18
+    check_pos(data, pos[0]+x)
     while (data[pos[0]+x] != CHR_TERM):
         x += 1
+        check_pos(data, pos[0]+x)
     cdef char *s = <char *>malloc(x)
     memcpy(s, &data[pos[0]], x)
     s[x] = '\0'
@@ -383,40 +389,46 @@ cdef decode_big_number(char *data, int *pos):
     free(s)
     return big_number
 
-cdef decode_float32(char *data, int *pos):
+cdef decode_float32(char *data, unsigned int *pos):
     cdef float f
+    check_pos(data, pos[0]+4)
     memcpy(&f, &data[pos[0]+1], 4)
     pos[0] += 5
     if not big_endian:
         f = swap_byte_order_float(<char*>&f)
     return f
 
-cdef decode_float64(char *data, int *pos):
+cdef decode_float64(char *data, unsigned int *pos):
     cdef double d
+    check_pos(data, pos[0]+8)
     memcpy(&d, &data[pos[0]+1], 8)
     pos[0] += 9
     if not big_endian:
         d = swap_byte_order_double(<char*>&d)
     return d
 
-cdef decode_fixed_str(char *data, int *pos):
+cdef decode_fixed_str(char *data, unsigned int *pos):
     cdef unsigned char size = data[pos[0]] - STR_FIXED_START + 1
+    check_pos(data, pos[0] + size - 1)
     s = data[pos[0]+1:pos[0] + size]
     pos[0] += size
     return s
 
-cdef decode_str(char *data, int *pos):
-    cdef int x = 1
+cdef decode_str(char *data, unsigned int *pos):
+    cdef unsigned int x = 1
+    check_pos(data, pos[0]+x)
     while (data[pos[0]+x] != 58):
         x += 1
+        check_pos(data, pos[0]+x)
 
     cdef int size = int(data[pos[0]:pos[0]+x])
     pos[0] += x + 1
+    check_pos(data, pos[0] + size - 1)
     s = data[pos[0]:pos[0] + size]
     pos[0] += size
     return s
 
-cdef decode_fixed_list(char *data, int *pos):
+cdef decode_fixed_list(char *data, unsigned int *pos):
     l = []
     size = <unsigned char>data[pos[0]] - LIST_FIXED_START
     pos[0] += 1
@@ -425,7 +437,7 @@ cdef decode_fixed_list(char *data, int *pos):
         l.append(decode(data, pos))
     return tuple(l)
 
-cdef decode_list(char *data, int *pos):
+cdef decode_list(char *data, unsigned int *pos):
     l = []
     pos[0] += 1
     while data[pos[0]] != CHR_TERM:
@@ -433,7 +445,7 @@ cdef decode_list(char *data, int *pos):
     pos[0] += 1
     return tuple(l)
 
-cdef decode_fixed_dict(char *data, int *pos):
+cdef decode_fixed_dict(char *data, unsigned int *pos):
     d = {}
     size = <unsigned char>data[pos[0]] - DICT_FIXED_START
     pos[0] += 1
@@ -444,9 +456,10 @@ cdef decode_fixed_dict(char *data, int *pos):
         d[key] = value
     return d
 
-cdef decode_dict(char *data, int *pos):
+cdef decode_dict(char *data, unsigned int *pos):
     d = {}
     pos[0] += 1
+    check_pos(data, pos[0])
     while data[pos[0]] != CHR_TERM:
         key = decode(data, pos)
         value = decode(data, pos)
@@ -454,9 +467,13 @@ cdef decode_dict(char *data, int *pos):
     pos[0] += 1
     return d
 
-cdef decode(char *data, int *pos):
-    if pos[0] > data_length:
-        raise ValueError("Malformed rencoded string!")
+cdef check_pos(char *data, unsigned int pos):
+    if pos >= data_length:
+        raise IndexError("Tried to access data[%d] but data len is: %d" % (pos, data_length))
+
+cdef decode(char *data, unsigned int *pos):
+    if pos[0] >= data_length:
+        raise IndexError("Malformed rencoded string: data_length: %d pos: %d" % (data_length, pos[0]))
 
     cdef unsigned char typecode = data[pos[0]]
     if typecode == CHR_INT1:
@@ -516,7 +533,7 @@ def loads(data, decode_utf8=False):
     :type decode_utf8: bool
 
     """
-    cdef int pos = 0
+    cdef unsigned int pos = 0
     global data_length
     data_length = len(data)
     global _decode_utf8
