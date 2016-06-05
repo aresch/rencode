@@ -143,8 +143,10 @@ class TestRencode(unittest.TestCase):
 
     def test_decode_int_big_number(self):
         n = int(b"9"*62)
+        toobig = '={}\x7f'.format('9'*65).encode()
         self.assertEqual(rencode.loads(rencode.dumps(n)), n)
         self.assertRaises(IndexError, rencode.loads, bytes(bytearray([61])))
+        self.assertRaises(ValueError, rencode.loads, toobig)
 
     def test_decode_float_32bit(self):
         f = rencode.dumps(1234.56)

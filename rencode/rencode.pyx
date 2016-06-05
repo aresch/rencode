@@ -380,13 +380,13 @@ cdef decode_big_number(char *data, unsigned int *pos):
     check_pos(data, pos[0]+x)
     while (data[pos[0]+x] != CHR_TERM):
         x += 1
+        if x >= MAX_INT_LENGTH:
+            raise ValueError(
+                "Number is longer than %d characters" % MAX_INT_LENGTH)
         check_pos(data, pos[0]+x)
-    cdef char *s = <char *>malloc(x)
-    memcpy(s, &data[pos[0]], x)
-    s[x] = '\0'
+
+    big_number = int(data[pos[0]:pos[0]+x])
     pos[0] += x + 1
-    big_number = int(s)
-    free(s)
     return big_number
 
 cdef decode_float32(char *data, unsigned int *pos):
