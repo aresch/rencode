@@ -32,7 +32,7 @@ from cpython cimport bool
 from libc.stdlib cimport realloc, free
 from libc.string cimport memcpy
 
-__version__ = ("Cython", 1, 0, 4)
+__version__ = ("Cython", 1, 0, 5)
 
 cdef long long data_length = 0
 cdef bool _decode_utf8 = False
