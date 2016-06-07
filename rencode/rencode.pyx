@@ -29,7 +29,7 @@ if py3:
     unicode = str
 
 from cpython cimport bool
-from libc.stdlib cimport realloc, malloc, free
+from libc.stdlib cimport realloc, free
 from libc.string cimport memcpy
 
 __version__ = ("Cython", 1, 0, 4)
@@ -151,11 +151,15 @@ cdef swap_byte_order_double(char *c):
 
 cdef write_buffer_char(char **buf, unsigned int *pos, char c):
     buf[0] = <char*>realloc(buf[0], pos[0] + 1)
+    if buf[0] == NULL:
+        raise MemoryError("Error in realloc, 1 byte needed")
     memcpy(&buf[0][pos[0]], &c, 1)
     pos[0] += 1
 
 cdef write_buffer(char **buf, unsigned int *pos, void* data, int size):
     buf[0] = <char*>realloc(buf[0], pos[0] + size)
+    if buf[0] == NULL:
+        raise MemoryError("Error in realloc, %d bytes needed", size)
     memcpy(&buf[0][pos[0]], data, size)
     pos[0] += size
 
