@@ -24,17 +24,33 @@
 #
 
 import sys
-from distutils.core import setup
-from distutils.extension import Extension
-from Cython.Distutils import build_ext
 from distutils.errors import CCompilerError, DistutilsPlatformError
 
+from setuptools import setup
+from setuptools.extension import Extension
+
+try:
+    from Cython.Build import build_ext
+    from Cython.Build import cythonize
+except ImportError as ex:
+    from setuptools.command.build_ext import build_ext
+    cythonize = False
+
+source_ext = ".pyx" if cythonize else ".c"
+
 ext_modules = [
-    Extension("rencode._rencode",
-              extra_compile_args=["-O3"],
-              sources=["rencode/rencode.pyx"]
-    )
+    Extension(
+        "rencode._rencode",
+        extra_compile_args=["-O3"],
+        sources=["rencode/rencode" + source_ext],
+    ),
 ]
+
+if 'sdist' in sys.argv and not cythonize:
+    exit('Error: sdist requires cython module to generate `.c` file.')
+
+if cythonize:
+    ext_modules = cythonize(ext_modules)
 
 class optional_build_ext(build_ext):
     # This class allows C extension building to fail.
@@ -62,22 +78,19 @@ available.""")
         print('*' * 70)
         print(exc)
 
-description = """\
-The rencode module is similar to bencode from the BitTorrent project. For
-complex, heterogeneous data structures with many small elements, r-encodings
-take up significantly less space than b-encodings. This version of rencode is
-a complete rewrite in Cython to attempt to increase the performance over the
-pure Python module written by Petru Paler, Connelly Barnes et al.
-"""
 
 setup(
   name="rencode",
   version="1.0.5",
   packages=["rencode"],
-  description=description,
+  description="Web safe object pickling/unpickling",
+  long_description=open("README.md").read(),
+  long_description_content_type="text/markdown",
+  license='GPLv3',
   author="Andrew Resch",
   author_email="andrewresch@gmail.com",
   url="https://github.com/aresch/rencode",
   cmdclass={'build_ext': optional_build_ext},
-  ext_modules=ext_modules
+  ext_modules=ext_modules,
+  setup_requires=['setuptools', 'wheel'],
 )
