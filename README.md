@@ -189,4 +189,4 @@ Overall functions totals:
 * Website: https://github.com/aresch/rencode
 
 ## License
-See [COPYING] (https://github.com/aresch/rencode/blob/master/COPYING)  for license information.
+See [COPYING](https://github.com/aresch/rencode/blob/master/COPYING)  for license information.
