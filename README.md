@@ -1,4 +1,4 @@
-#rencode
+# rencode
 
 The rencode module is similar to bencode from the BitTorrent project.  For complex, heterogeneous data structures with many small elements, r-encodings take up significantly less space than b-encodings:
 
@@ -13,11 +13,11 @@ The rencode module is similar to bencode from the BitTorrent project.  For compl
 This version of rencode is a complete rewrite in Cython to attempt to increase the performance over the pure Python module written by Petru Paler, Connelly Barnes et al.
 
 
-##Performance Comparison
+## Performance Comparison
 The test program used for these results is included in the repository:
 https://github.com/aresch/rencode/blob/master/tests/timetest.py
 
-###Encode functions
+### Encode functions
 ```
 test_encode_fixed_pos_int:
 	rencode.pyx: 0.003s (+0.013s) 589.17%
@@ -91,7 +91,7 @@ Encode functions totals:
 	rencode.pyx: 0.412s (+0.888s) 315.49%
 	rencode.py:  1.301s
 ```
-###Decode functions
+### Decode functions
 
 ```
 test_decode_fixed_list:
@@ -167,7 +167,7 @@ Decode functions totals:
 	rencode.py:  1.348s
 ```
 
-###Overall functions
+### Overall functions
 
 ```
 test_overall_encode:
@@ -184,9 +184,9 @@ Overall functions totals:
 ```
 
 
-##Author
+## Author
 * Andrew Resch <andrewresch@gmail.com>
 * Website: https://github.com/aresch/rencode
 
-##License
+## License
 See [COPYING] (https://github.com/aresch/rencode/blob/master/COPYING)  for license information.
