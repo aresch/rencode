@@ -11,7 +11,7 @@ matrix:
       env: PIP=pip2
 
 install:
-  - $PYTHON -m pip install -r dev-requirements.txt
+  - $PIP install -r dev-requirements.txt
 
 script:
   - $PIP install cibuildwheel==0.10.0
