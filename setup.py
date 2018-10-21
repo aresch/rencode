@@ -81,7 +81,7 @@ available.""")
 
 setup(
   name="rencode",
-  version="1.0.5",
+  version="1.0.6",
   packages=["rencode"],
   description="Web safe object pickling/unpickling",
   long_description=open("README.md").read(),
