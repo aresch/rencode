@@ -20,5 +20,8 @@ install:
 script:
   - $PIP install cibuildwheel==0.10.0
   - cibuildwheel --output-dir wheelhouse
-  - $PIP install twine
-  - python -m twine upload wheelhouse/*.whl
+  - |
+    if [[ $TRAVIS_TAG ]]; then
+      $PIP install twine
+      python -m twine upload wheelhouse/*.whl
+    fi
