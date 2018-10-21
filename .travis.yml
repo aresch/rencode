@@ -1,5 +1,9 @@
 language: python
 
+env:
+  global:
+    - TWINE_USERNAME=andrew.resch
+
 matrix:
   include:
     - sudo: required
@@ -16,3 +20,5 @@ install:
 script:
   - $PIP install cibuildwheel==0.10.0
   - cibuildwheel --output-dir wheelhouse
+  - $PIP install twine
+  - python -m twine upload wheelhouse/*.whl
