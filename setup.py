@@ -42,7 +42,7 @@ ext_modules = [
     Extension(
         "rencode._rencode",
         extra_compile_args=["-O3"],
-        sources=["rencode/rencode" + source_ext],
+        sources=["rencode/_rencode" + source_ext],
     ),
 ]
 
