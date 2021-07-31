@@ -63,7 +63,7 @@ import struct
 import sys
 from threading import Lock
 
-__version__ = ("Python", 1, 0, 6)
+__version__ = ("Python", 1, 0, 7)
 __all__ = ('dumps', 'loads')
 
 def int2byte(c):
