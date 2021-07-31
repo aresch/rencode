@@ -22,13 +22,11 @@
 #     Boston, MA  02110-1301, USA.
 #
 
+#cython: language_level=3
+
 from __future__ import absolute_import
 
 import sys
-
-py3 = sys.version_info[0] >= 3
-if py3:
-    unicode = str
 
 from cpython cimport bool
 from libc.stdlib cimport realloc, free
@@ -40,11 +38,9 @@ cdef long long data_length = 0
 cdef bool _decode_utf8 = False
 
 # Determine host byte-order
-cdef bool big_endian = False
 cdef unsigned long number = 1
 cdef char *s = <char *>&number
-if s[0] == 0:
-    big_endian = True
+cdef bool big_endian = s[0] == 0
 
 cdef enum:
     # Default number of bits for serialized floats, either 32 or 64 (also a parameter for dumps()).
@@ -227,8 +223,7 @@ cdef encode_str(char **buf, unsigned int *pos, bytes x):
         write_buffer(buf, pos, <char *>x, lx)
     else:
         s = str(lx) + ":"
-        if py3:
-            s = s.encode("ascii")
+        s = s.encode("ascii")
         p = s
         write_buffer(buf, pos, p, len(s))
         write_buffer(buf, pos, <char *>x, lx)
@@ -275,7 +270,7 @@ cdef object MIN_SIGNED_LONGLONG = -MAX_SIGNED_LONGLONG
 
 cdef encode(char **buf, unsigned int *pos, data):
     t = type(data)
-    if t == int or t == long:
+    if t == int:
         if -128 <= data < 128:
             encode_char(buf, pos, data)
         elif -32768 <= data < 32768:
@@ -285,9 +280,7 @@ cdef encode(char **buf, unsigned int *pos, data):
         elif MIN_SIGNED_LONGLONG <= data < MAX_SIGNED_LONGLONG:
             encode_long_long(buf, pos, data)
         else:
-            s = str(data)
-            if py3:
-                s = s.encode("ascii")
+            s = str(data).encode("ascii")
             if len(s) >= MAX_INT_LENGTH:
                 raise ValueError("Number is longer than %d characters" % MAX_INT_LENGTH)
             encode_big_number(buf, pos, s)
@@ -302,7 +295,7 @@ cdef encode(char **buf, unsigned int *pos, data):
     elif t == bytes:
         encode_str(buf, pos, data)
 
-    elif t == unicode:
+    elif t == str:
         u = data.encode("utf8")
         encode_str(buf, pos, u)
 

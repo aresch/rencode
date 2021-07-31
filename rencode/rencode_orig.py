@@ -66,16 +66,8 @@ from threading import Lock
 __version__ = ("Python", 1, 0, 6)
 __all__ = ('dumps', 'loads')
 
-py3 = sys.version_info[0] >= 3
-if py3:
-    long = int
-    unicode = str
-
-    def int2byte(c):
-        return bytes([c])
-else:
-    def int2byte(c):
-        return chr(c)
+def int2byte(c):
+    return struct.pack('!B', c)
 
 # Default number of bits for serialized floats, either 32 or 64 (also a parameter for dumps()).
 DEFAULT_FLOAT_BITS = 32
@@ -128,10 +120,7 @@ def decode_int(x, f):
     newf = x.index(CHR_TERM, f)
     if newf - f >= MAX_INT_LENGTH:
         raise ValueError('overflow')
-    try:
-        n = int(x[f:newf])
-    except (OverflowError, ValueError):
-        n = long(x[f:newf])
+    n = int(x[f:newf])
     if x[f:f + 1] == '-':
         if x[f + 1:f + 2] == '0':
             raise ValueError
@@ -175,10 +164,7 @@ def decode_float64(x, f):
 
 def decode_string(x, f):
     colon = x.index(b':', f)
-    try:
-        n = int(x[f:colon])
-    except (OverflowError, ValueError):
-        n = long(x[f:colon])
+    n = int(x[f:colon])
     if x[f] == '0' and colon != f + 1:
         raise ValueError
     colon += 1
@@ -323,10 +309,7 @@ def encode_int(x, r):
     elif -9223372036854775808 <= x < 9223372036854775808:
         r.extend((CHR_INT8, struct.pack('!q', x)))
     else:
-        s = str(x)
-        if py3:
-            s = bytes(s, "ascii")
-
+        s = b"%i" % x
         if len(s) >= MAX_INT_LENGTH:
             raise ValueError('overflow')
         r.extend((CHR_INT, s, CHR_TERM))
@@ -352,10 +335,7 @@ def encode_string(x, r):
     if len(x) < STR_FIXED_COUNT:
         r.extend((int2byte(STR_FIXED_START + len(x)), x))
     else:
-        s = str(len(x))
-        if py3:
-            s = bytes(s, "ascii")
-        r.extend((s, b':', x))
+        r.extend((b"%i" % len(x), b':', x))
 
 
 def encode_unicode(x, r):
@@ -389,13 +369,12 @@ def encode_dict(x, r):
 
 encode_func = {}
 encode_func[int] = encode_int
-encode_func[long] = encode_int
 encode_func[bytes] = encode_string
 encode_func[list] = encode_list
 encode_func[tuple] = encode_list
 encode_func[dict] = encode_dict
 encode_func[type(None)] = encode_none
-encode_func[unicode] = encode_unicode
+encode_func[str] = encode_unicode
 encode_func[bool] = encode_bool
 
 lock = Lock()
