@@ -121,10 +121,10 @@ def decode_int(x, f):
     if newf - f >= MAX_INT_LENGTH:
         raise ValueError('overflow')
     n = int(x[f:newf])
-    if x[f:f + 1] == '-':
-        if x[f + 1:f + 2] == '0':
+    if x[f:f + 1] == b'-':
+        if x[f + 1:f + 2] == b'0':
             raise ValueError
-    elif x[f:f + 1] == '0' and newf != f + 1:
+    elif x[f:f + 1] == b'0' and newf != f + 1:
         raise ValueError
     return (n, newf + 1)
 
@@ -165,7 +165,7 @@ def decode_float64(x, f):
 def decode_string(x, f):
     colon = x.index(b':', f)
     n = int(x[f:colon])
-    if x[f] == '0' and colon != f + 1:
+    if x[f] == ord(b'0') and colon != f + 1:
         raise ValueError
     colon += 1
     s = x[colon:colon + n]
