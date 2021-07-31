@@ -33,8 +33,7 @@ from libc.stdlib cimport realloc, free
 from libc.string cimport memcpy
 
 __version__ = ("Cython", 1, 0, 7)
-
-cdef long long data_length = 0
+thread_safe = True
 
 # Determine host byte-order
 cdef unsigned long number = 1
@@ -339,34 +338,34 @@ def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     free(buf)
     return ret
 
-cdef decode_char(char *data, unsigned int *pos):
+cdef decode_char(char *data, unsigned int *pos, long long data_length):
     cdef signed char c
-    check_pos(data, pos[0]+1)
+    check_pos(data, pos[0]+1, data_length)
     memcpy(&c, &data[pos[0]+1], 1)
     pos[0] += 2
     return c
 
-cdef decode_short(char *data, unsigned int *pos):
+cdef decode_short(char *data, unsigned int *pos, long long data_length):
     cdef short s
-    check_pos(data, pos[0]+2)
+    check_pos(data, pos[0]+2, data_length)
     memcpy(&s, &data[pos[0]+1], 2)
     pos[0] += 3
     if not big_endian:
         s = swap_byte_order_short(<char*>&s)
     return s
 
-cdef decode_int(char *data, unsigned int *pos):
+cdef decode_int(char *data, unsigned int *pos, long long data_length):
     cdef int i
-    check_pos(data, pos[0]+4)
+    check_pos(data, pos[0]+4, data_length)
     memcpy(&i, &data[pos[0]+1], 4)
     pos[0] += 5
     if not big_endian:
         i = swap_byte_order_int(<char*>&i)
     return i
 
-cdef decode_long_long(char *data, unsigned int *pos):
+cdef decode_long_long(char *data, unsigned int *pos, long long data_length):
     cdef long long l
-    check_pos(data, pos[0]+8)
+    check_pos(data, pos[0]+8, data_length)
     memcpy(&l, &data[pos[0]+1], 8)
     pos[0] += 9
     if not big_endian:
@@ -381,145 +380,144 @@ cdef decode_fixed_neg_int(char *data, unsigned int *pos):
     pos[0] += 1
     return (data[pos[0] - 1] - INT_NEG_FIXED_START + 1)*-1
 
-cdef decode_big_number(char *data, unsigned int *pos):
+cdef decode_big_number(char *data, unsigned int *pos, long long data_length):
     pos[0] += 1
     cdef int x = 18
-    check_pos(data, pos[0]+x)
+    check_pos(data, pos[0]+x, data_length)
     while (data[pos[0]+x] != CHR_TERM):
         x += 1
         if x >= MAX_INT_LENGTH:
             raise ValueError(
                 "Number is longer than %d characters" % MAX_INT_LENGTH)
-        check_pos(data, pos[0]+x)
+        check_pos(data, pos[0]+x, data_length)
 
     big_number = int(data[pos[0]:pos[0]+x])
     pos[0] += x + 1
     return big_number
 
-cdef decode_float32(char *data, unsigned int *pos):
+cdef decode_float32(char *data, unsigned int *pos, long long data_length):
     cdef float f
-    check_pos(data, pos[0]+4)
+    check_pos(data, pos[0]+4, data_length)
     memcpy(&f, &data[pos[0]+1], 4)
     pos[0] += 5
     if not big_endian:
         f = swap_byte_order_float(<char*>&f)
     return f
 
-cdef decode_float64(char *data, unsigned int *pos):
+cdef decode_float64(char *data, unsigned int *pos, long long data_length):
     cdef double d
-    check_pos(data, pos[0]+8)
+    check_pos(data, pos[0]+8, data_length)
     memcpy(&d, &data[pos[0]+1], 8)
     pos[0] += 9
     if not big_endian:
         d = swap_byte_order_double(<char*>&d)
     return d
 
-cdef decode_fixed_str(char *data, unsigned int *pos):
+cdef decode_fixed_str(char *data, unsigned int *pos, long long data_length):
     cdef unsigned char size = data[pos[0]] - STR_FIXED_START + 1
-    check_pos(data, pos[0] + size - 1)
+    check_pos(data, pos[0] + size - 1, data_length)
     s = data[pos[0]+1:pos[0] + size]
     pos[0] += size
     return s
 
-cdef decode_str(char *data, unsigned int *pos):
+cdef decode_str(char *data, unsigned int *pos, long long data_length):
     cdef unsigned int x = 1
-    check_pos(data, pos[0]+x)
+    check_pos(data, pos[0]+x, data_length)
     while (data[pos[0]+x] != 58):
         x += 1
-        check_pos(data, pos[0]+x)
+        check_pos(data, pos[0]+x, data_length)
 
     cdef int size = int(data[pos[0]:pos[0]+x])
     pos[0] += x + 1
-    check_pos(data, pos[0] + size - 1)
+    check_pos(data, pos[0] + size - 1, data_length)
     s = data[pos[0]:pos[0] + size]
     pos[0] += size
     return s
 
-cdef decode_bytes(char *data, unsigned int *pos):
+cdef decode_bytes(char *data, unsigned int *pos, long long data_length):
     cdef unsigned int x = 1
-    check_pos(data, pos[0]+x)
+    check_pos(data, pos[0]+x, data_length)
     while (data[pos[0]+x] != 58):
         x += 1
-        check_pos(data, pos[0]+x)
+        check_pos(data, pos[0]+x, data_length)
 
     cdef int size = int(data[pos[0]+1:pos[0]+x])
     pos[0] += x + 1
-    check_pos(data, pos[0] + size - 1)
+    check_pos(data, pos[0] + size - 1, data_length)
     s = data[pos[0]:pos[0] + size]
     pos[0] += size
     return s
 
-cdef decode_fixed_list(char *data, unsigned int *pos):
+cdef decode_fixed_list(char *data, unsigned int *pos, long long data_length):
     l = []
     size = <unsigned char>data[pos[0]] - LIST_FIXED_START
     pos[0] += 1
     cdef int i
     for i in range(size):
-        l.append(decode(data, pos))
+        l.append(decode(data, pos, data_length))
     return tuple(l)
 
-cdef decode_list(char *data, unsigned int *pos):
+cdef decode_list(char *data, unsigned int *pos, long long data_length):
     l = []
     pos[0] += 1
     while data[pos[0]] != CHR_TERM:
-        l.append(decode(data, pos))
+        l.append(decode(data, pos, data_length))
     pos[0] += 1
     return tuple(l)
 
-cdef decode_fixed_dict(char *data, unsigned int *pos):
+cdef decode_fixed_dict(char *data, unsigned int *pos, long long data_length):
     d = {}
     size = <unsigned char>data[pos[0]] - DICT_FIXED_START
     pos[0] += 1
     cdef int i
     for i in range(size):
-        key = decode(data, pos)
-        value = decode(data, pos)
+        key = decode(data, pos, data_length)
+        value = decode(data, pos, data_length)
         d[key] = value
     return d
 
-cdef decode_dict(char *data, unsigned int *pos):
+cdef decode_dict(char *data, unsigned int *pos, long long data_length):
     d = {}
     pos[0] += 1
-    check_pos(data, pos[0])
+    check_pos(data, pos[0], data_length)
     while data[pos[0]] != CHR_TERM:
-        key = decode(data, pos)
-        value = decode(data, pos)
+        key = decode(data, pos, data_length)
+        value = decode(data, pos, data_length)
         d[key] = value
     pos[0] += 1
     return d
 
-cdef check_pos(char *data, unsigned int pos):
+cdef inline check_pos(char *data, unsigned int pos, long long data_length):
     if pos >= data_length:
         raise IndexError("Tried to access data[%d] but data len is: %d" % (pos, data_length))
 
-cdef decode(char *data, unsigned int *pos):
-    if pos[0] >= data_length:
-        raise IndexError("Malformed rencoded string: data_length: %d pos: %d" % (data_length, pos[0]))
+cdef decode(char *data, unsigned int *pos, long long data_length):
+    check_pos(data, pos[0], data_length)
 
     cdef unsigned char typecode = data[pos[0]]
     if typecode == CHR_INT1:
-        return decode_char(data, pos)
+        return decode_char(data, pos, data_length)
     elif typecode == CHR_INT2:
-        return decode_short(data, pos)
+        return decode_short(data, pos, data_length)
     elif typecode == CHR_INT4:
-        return decode_int(data, pos)
+        return decode_int(data, pos, data_length)
     elif typecode == CHR_INT8:
-        return decode_long_long(data, pos)
+        return decode_long_long(data, pos, data_length)
     elif INT_POS_FIXED_START <= typecode < INT_POS_FIXED_START + INT_POS_FIXED_COUNT:
         return decode_fixed_pos_int(data, pos)
     elif INT_NEG_FIXED_START <= typecode < INT_NEG_FIXED_START + INT_NEG_FIXED_COUNT:
         return decode_fixed_neg_int(data, pos)
     elif typecode == CHR_INT:
-        return decode_big_number(data, pos)
+        return decode_big_number(data, pos, data_length)
     elif typecode == CHR_FLOAT32:
-        return decode_float32(data, pos)
+        return decode_float32(data, pos, data_length)
     elif typecode == CHR_FLOAT64:
-        return decode_float64(data, pos)
+        return decode_float64(data, pos, data_length)
     elif STR_FIXED_START <= typecode < STR_FIXED_START + STR_FIXED_COUNT:
-        s = decode_fixed_str(data, pos)
+        s = decode_fixed_str(data, pos, data_length)
         return s.decode("utf8")
     elif 49 <= typecode <= 57:
-        s = decode_str(data, pos)
+        s = decode_str(data, pos, data_length)
         return s.decode("utf8")
     elif typecode == CHR_NONE:
         pos[0] += 1
@@ -531,15 +529,15 @@ cdef decode(char *data, unsigned int *pos):
         pos[0] += 1
         return False
     elif LIST_FIXED_START <= typecode < LIST_FIXED_START + LIST_FIXED_COUNT:
-        return decode_fixed_list(data, pos)
+        return decode_fixed_list(data, pos, data_length)
     elif typecode == CHR_LIST:
-        return decode_list(data, pos)
+        return decode_list(data, pos, data_length)
     elif typecode == CHR_BIN:
-        return decode_bytes(data, pos)
+        return decode_bytes(data, pos, data_length)
     elif DICT_FIXED_START <= typecode < DICT_FIXED_START + DICT_FIXED_COUNT:
-        return decode_fixed_dict(data, pos)
+        return decode_fixed_dict(data, pos, data_length)
     elif typecode == CHR_DICT:
-        return decode_dict(data, pos)
+        return decode_dict(data, pos, data_length)
 
 def loads(data):
     """
@@ -550,6 +548,4 @@ def loads(data):
 
     """
     cdef unsigned int pos = 0
-    global data_length
-    data_length = len(data)
-    return decode(data, &pos)
+    return decode(data, &pos, len(data))

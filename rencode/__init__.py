@@ -1,6 +1,6 @@
 try:
     from rencode._rencode import *
-    from rencode._rencode import __version__
+    from rencode._rencode import __version__, thread_safe
 except ImportError:
     import rencode.rencode_orig
     prev_all = rencode.rencode_orig.__all__[:]

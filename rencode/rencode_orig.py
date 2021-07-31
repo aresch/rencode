@@ -64,7 +64,8 @@ import sys
 from threading import Lock
 
 __version__ = ("Python", 1, 0, 7)
-__all__ = ('dumps', 'loads')
+thread_safe = True
+__all__ = ('dumps', 'loads', 'thread_safe')
 
 def int2byte(c):
     return struct.pack('!B', c)
