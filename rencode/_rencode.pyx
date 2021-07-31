@@ -35,7 +35,6 @@ from libc.string cimport memcpy
 __version__ = ("Cython", 1, 0, 7)
 
 cdef long long data_length = 0
-cdef bool _decode_utf8 = False
 
 # Determine host byte-order
 cdef unsigned long number = 1
@@ -49,6 +48,7 @@ cdef enum:
     MAX_INT_LENGTH = 64
     # The bencode 'typecodes' such as i, d, etc have been extended and
     # relocated on the base-256 character set.
+    CHR_BIN     = 47
     CHR_LIST    = 59
     CHR_DICT    = 60
     CHR_INT     = 61
@@ -215,6 +215,15 @@ cdef encode_float64(char **buf, unsigned int *pos, double x):
         x = swap_byte_order_double(<char *>&x)
     write_buffer(buf, pos, &x, sizeof(x))
 
+cdef encode_bytes(char **buf, unsigned int *pos, bytes x):
+    cdef char *p
+    cdef int lx = len(x)
+    write_buffer_char(buf, pos, CHR_BIN)
+    s = b"%i:" % lx
+    p = s
+    write_buffer(buf, pos, p, len(s))
+    write_buffer(buf, pos, <char *>x, lx)
+
 cdef encode_str(char **buf, unsigned int *pos, bytes x):
     cdef char *p
     cdef int lx = len(x)
@@ -222,8 +231,7 @@ cdef encode_str(char **buf, unsigned int *pos, bytes x):
         write_buffer_char(buf, pos, STR_FIXED_START + lx)
         write_buffer(buf, pos, <char *>x, lx)
     else:
-        s = str(lx) + ":"
-        s = s.encode("ascii")
+        s = b"%i:" % lx
         p = s
         write_buffer(buf, pos, p, len(s))
         write_buffer(buf, pos, <char *>x, lx)
@@ -293,7 +301,7 @@ cdef encode(char **buf, unsigned int *pos, data):
             raise ValueError('Float bits (%d) is not 32 or 64' % _float_bits)
 
     elif t == bytes:
-        encode_str(buf, pos, data)
+        encode_bytes(buf, pos, data)
 
     elif t == str:
         u = data.encode("utf8")
@@ -427,6 +435,20 @@ cdef decode_str(char *data, unsigned int *pos):
     pos[0] += size
     return s
 
+cdef decode_bytes(char *data, unsigned int *pos):
+    cdef unsigned int x = 1
+    check_pos(data, pos[0]+x)
+    while (data[pos[0]+x] != 58):
+        x += 1
+        check_pos(data, pos[0]+x)
+
+    cdef int size = int(data[pos[0]+1:pos[0]+x])
+    pos[0] += x + 1
+    check_pos(data, pos[0] + size - 1)
+    s = data[pos[0]:pos[0] + size]
+    pos[0] += size
+    return s
+
 cdef decode_fixed_list(char *data, unsigned int *pos):
     l = []
     size = <unsigned char>data[pos[0]] - LIST_FIXED_START
@@ -495,14 +517,10 @@ cdef decode(char *data, unsigned int *pos):
         return decode_float64(data, pos)
     elif STR_FIXED_START <= typecode < STR_FIXED_START + STR_FIXED_COUNT:
         s = decode_fixed_str(data, pos)
-        if _decode_utf8:
-            s = s.decode("utf8")
-        return s
+        return s.decode("utf8")
     elif 49 <= typecode <= 57:
         s = decode_str(data, pos)
-        if _decode_utf8:
-            s = s.decode("utf8")
-        return s
+        return s.decode("utf8")
     elif typecode == CHR_NONE:
         pos[0] += 1
         return None
@@ -516,25 +534,22 @@ cdef decode(char *data, unsigned int *pos):
         return decode_fixed_list(data, pos)
     elif typecode == CHR_LIST:
         return decode_list(data, pos)
+    elif typecode == CHR_BIN:
+        return decode_bytes(data, pos)
     elif DICT_FIXED_START <= typecode < DICT_FIXED_START + DICT_FIXED_COUNT:
         return decode_fixed_dict(data, pos)
     elif typecode == CHR_DICT:
         return decode_dict(data, pos)
 
-def loads(data, decode_utf8=False):
+def loads(data):
     """
     Decodes the string into an object
 
     :param data: the string to decode
     :type data: string
-    :param decode_utf8: if True, will attempt to decode all str into unicode
-                        objects using utf8
-    :type decode_utf8: bool
 
     """
     cdef unsigned int pos = 0
     global data_length
     data_length = len(data)
-    global _decode_utf8
-    _decode_utf8=decode_utf8
     return decode(data, &pos)

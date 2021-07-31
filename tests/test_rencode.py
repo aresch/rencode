@@ -30,17 +30,6 @@ from rencode import _rencode as rencode
 from rencode import rencode_orig
 
 
-# Hack to deal with python 2 and 3 differences with unicode literals.
-if sys.version < '3':
-    import codecs
-    def u(x):
-        return codecs.unicode_escape_decode(x)[0]
-else:
-    unicode = str
-    def u(x):
-        return x
-
-
 class TestRencode(unittest.TestCase):
     def test_encode_fixed_pos_int(self):
         self.assertEqual(rencode.dumps(1), rencode_orig.dumps(1))
@@ -88,7 +77,7 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.dumps(b"\0"), rencode_orig.dumps(b"\0"))
 
     def test_encode_unicode(self):
-        self.assertEqual(rencode.dumps(u("fööbar")), rencode_orig.dumps(u("fööbar")))
+        self.assertEqual(rencode.dumps(u"fööbar"), rencode_orig.dumps(u"fööbar"))
 
     def test_encode_none(self):
         self.assertEqual(rencode.dumps(None), rencode_orig.dumps(None))
@@ -98,11 +87,11 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.dumps(False), rencode_orig.dumps(False))
 
     def test_encode_fixed_list(self):
-        l = [100, -234.01, b"foobar", u("bäz")]*4
+        l = [100, -234.01, b"foobar", u"bäz"]*4
         self.assertEqual(rencode.dumps(l), rencode_orig.dumps(l))
 
     def test_encode_list(self):
-        l = [100, -234.01, b"foobar", u("bäz")]*80
+        l = [100, -234.01, b"foobar", u"bäz"]*80
         self.assertEqual(rencode.dumps(l), rencode_orig.dumps(l))
 
     def test_encode_fixed_dict(self):
@@ -167,7 +156,7 @@ class TestRencode(unittest.TestCase):
         self.assertRaises(IndexError, rencode.loads, b"50")
 
     def test_decode_unicode(self):
-        self.assertEqual(rencode.loads(rencode.dumps(u("fööbar"))), u("fööbar").encode("utf8"))
+        self.assertEqual(rencode.loads(rencode.dumps(u"fööbar")), u"fööbar")
 
     def test_decode_none(self):
         self.assertEqual(rencode.loads(rencode.dumps(None)), None)
@@ -177,12 +166,12 @@ class TestRencode(unittest.TestCase):
         self.assertEqual(rencode.loads(rencode.dumps(False)), False)
 
     def test_decode_fixed_list(self):
-        l = [100, False, b"foobar", u("bäz").encode("utf8")]*4
+        l = [100, False, b"foobar", u"bäz".encode("utf8")]*4
         self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
         self.assertRaises(IndexError, rencode.loads, bytes(bytearray([194])))
 
     def test_decode_list(self):
-        l = [100, False, b"foobar", u("bäz").encode("utf8")]*80
+        l = [100, False, b"foobar", u"bäz".encode("utf8")]*80
         self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
         self.assertRaises(IndexError, rencode.loads, bytes(bytearray([59])))
 
@@ -212,11 +201,11 @@ class TestRencode(unittest.TestCase):
     def test_decode_utf8(self):
         s = b"foobarbaz"
         #no assertIsInstance with python2.6
-        d = rencode.loads(rencode.dumps(s), decode_utf8=True)
-        if not isinstance(d, unicode):
-            self.fail('%s is not an instance of %r' % (repr(d), unicode))
-        s = rencode.dumps(b"\x56\xe4foo\xc3")
-        self.assertRaises(UnicodeDecodeError, rencode.loads, s, decode_utf8=True)
+        d = rencode.loads(rencode.dumps(s))
+        if not isinstance(d, bytes):
+            self.fail('%s is not an instance of %r' % (repr(d), bytes))
+        #s = rencode.dumps(b"\x56\xe4foo\xc3")
+        #self.assertRaises(UnicodeDecodeError, rencode.loads, s, decode_utf8=True)
 
     def test_version_exposed(self):
         assert rencode.__version__

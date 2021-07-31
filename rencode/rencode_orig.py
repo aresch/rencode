@@ -77,6 +77,7 @@ MAX_INT_LENGTH = 64
 
 # The bencode 'typecodes' such as i, d, etc have been extended and
 # relocated on the base-256 character set.
+CHR_BIN = int2byte(47)
 CHR_LIST = int2byte(59)
 CHR_DICT = int2byte(60)
 CHR_INT = int2byte(61)
@@ -110,9 +111,6 @@ STR_FIXED_COUNT = 64
 # Lists with length embedded in typecode.
 LIST_FIXED_START = STR_FIXED_START + STR_FIXED_COUNT
 LIST_FIXED_COUNT = 64
-
-# Whether strings should be decoded when loading
-_decode_utf8 = False
 
 
 def decode_int(x, f):
@@ -169,10 +167,16 @@ def decode_string(x, f):
         raise ValueError
     colon += 1
     s = x[colon:colon + n]
-    if _decode_utf8:
-        s = s.decode('utf8')
-    return (s, colon + n)
+    return (s.decode('utf8'), colon + n)
 
+def decode_bin(x, f):
+    colon = x.index(b':', f+1)
+    if x[f+1] == ord(b'0') and colon != f + 2:
+        raise ValueError
+    n = int(x[f+1:colon])
+    colon += 1
+    s = x[colon:colon + n]
+    return (s, colon + n)
 
 def decode_list(x, f):
     r, f = [], f + 1
@@ -212,6 +216,7 @@ decode_func[b'6'] = decode_string
 decode_func[b'7'] = decode_string
 decode_func[b'8'] = decode_string
 decode_func[b'9'] = decode_string
+decode_func[CHR_BIN] = decode_bin
 decode_func[CHR_LIST] = decode_list
 decode_func[CHR_DICT] = decode_dict
 decode_func[CHR_INT] = decode_int
@@ -230,9 +235,7 @@ def make_fixed_length_string_decoders():
     def make_decoder(slen):
         def f(x, f):
             s = x[f + 1:f + 1 + slen]
-            if _decode_utf8:
-                s = s.decode("utf8")
-            return (s, f + 1 + slen)
+            return (s.decode("utf8"), f + 1 + slen)
         return f
     for i in range(STR_FIXED_COUNT):
         decode_func[int2byte(STR_FIXED_START + i)] = make_decoder(i)
@@ -283,9 +286,7 @@ def make_fixed_length_dict_decoders():
 make_fixed_length_dict_decoders()
 
 
-def loads(x, decode_utf8=False):
-    global _decode_utf8
-    _decode_utf8 = decode_utf8
+def loads(x):
     try:
         r, l = decode_func[x[0:1]](x, 0)
     except (IndexError, KeyError):
@@ -331,15 +332,15 @@ def encode_none(x, r):
     r.append(CHR_NONE)
 
 
-def encode_string(x, r):
-    if len(x) < STR_FIXED_COUNT:
-        r.extend((int2byte(STR_FIXED_START + len(x)), x))
-    else:
-        r.extend((b"%i" % len(x), b':', x))
-
+def encode_bytes(x, r):
+    r.extend((CHR_BIN, b"%i" % len(x), b':', x))
 
 def encode_unicode(x, r):
-    encode_string(x.encode("utf8"), r)
+    b = x.encode("utf8")
+    if len(b) < STR_FIXED_COUNT:
+        r.extend((int2byte(STR_FIXED_START + len(b)), b))
+    else:
+        r.extend((b"%i" % len(b), b':', b))
 
 
 def encode_list(x, r):
@@ -369,7 +370,7 @@ def encode_dict(x, r):
 
 encode_func = {}
 encode_func[int] = encode_int
-encode_func[bytes] = encode_string
+encode_func[bytes] = encode_bytes
 encode_func[list] = encode_list
 encode_func[tuple] = encode_list
 encode_func[dict] = encode_dict
@@ -427,7 +428,7 @@ def test():
     assert 1e-10 < abs(loads(dumps(1.1)) - 1.1) < 1e-6
     assert 1e-10 < abs(loads(dumps(1.1, 32)) - 1.1) < 1e-6
     assert abs(loads(dumps(1.1, 64)) - 1.1) < 1e-12
-    assert loads(dumps("Hello World!!"), decode_utf8=True)
+    assert loads(dumps("Hello World!!"))
 try:
     import psyco
     psyco.bind(dumps)
