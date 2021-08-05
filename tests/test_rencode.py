@@ -223,5 +223,14 @@ class TestRencode(unittest.TestCase):
         assert rencode_orig.__version__
         self.assertEqual(rencode.__version__[1:], rencode_orig.__version__[1:], "version number does not match")
 
+    def test_invalidtypecode(self):
+        s = b';\x2f\x7f'
+        try:
+            rencode.loads(s)
+        except Exception:
+            pass
+        else:
+            raise Exception("invalid typecode should raise an Exception")
+
 if __name__ == '__main__':
     unittest.main()
