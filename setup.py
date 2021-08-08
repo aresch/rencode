@@ -92,5 +92,5 @@ setup(
   url="https://github.com/aresch/rencode",
   cmdclass={'build_ext': optional_build_ext},
   ext_modules=ext_modules,
-  setup_requires=['setuptools', 'wheel'],
+  setup_requires=['setuptools'],
 )
