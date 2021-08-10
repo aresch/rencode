@@ -34,6 +34,7 @@ try:
     from Cython.Build import cythonize
 except ImportError as ex:
     from setuptools.command.build_ext import build_ext
+
     cythonize = False
 
 source_ext = ".pyx" if cythonize else ".c"
@@ -46,11 +47,12 @@ ext_modules = [
     ),
 ]
 
-if 'sdist' in sys.argv and not cythonize:
-    exit('Error: sdist requires cython module to generate `.c` file.')
+if "sdist" in sys.argv and not cythonize:
+    exit("Error: sdist requires cython module to generate `.c` file.")
 
 if cythonize:
     ext_modules = cythonize(ext_modules)
+
 
 class optional_build_ext(build_ext):
     # This class allows C extension building to fail.
@@ -71,26 +73,28 @@ class optional_build_ext(build_ext):
             self._unavailable(e)
 
     def _unavailable(self, exc):
-        print('*' * 70)
-        print("""WARNING:
+        print("*" * 70)
+        print(
+            """WARNING:
 The C extension could not be compiled, speedups will not be
-available.""")
-        print('*' * 70)
+available."""
+        )
+        print("*" * 70)
         print(exc)
 
 
 setup(
-  name="rencode",
-  version="1.0.6",
-  packages=["rencode"],
-  description="Web safe object pickling/unpickling",
-  long_description=open("README.md").read(),
-  long_description_content_type="text/markdown",
-  license='GPLv3',
-  author="Andrew Resch",
-  author_email="andrewresch@gmail.com",
-  url="https://github.com/aresch/rencode",
-  cmdclass={'build_ext': optional_build_ext},
-  ext_modules=ext_modules,
-  setup_requires=['setuptools'],
+    name="rencode",
+    version="1.0.6",
+    packages=["rencode"],
+    description="Web safe object pickling/unpickling",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+    license="GPLv3",
+    author="Andrew Resch",
+    author_email="andrewresch@gmail.com",
+    url="https://github.com/aresch/rencode",
+    cmdclass={"build_ext": optional_build_ext},
+    ext_modules=ext_modules,
+    setup_requires=["setuptools"],
 )
