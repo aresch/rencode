@@ -527,6 +527,8 @@ cdef decode(char *data, unsigned int *pos):
         return decode_fixed_dict(data, pos)
     elif typecode == CHR_DICT:
         return decode_dict(data, pos)
+    else:
+        raise ValueError("Invalid typecode: %d at pos: %d" % (typecode, pos[0]))
 
 def loads(data, decode_utf8=False):
     """

@@ -401,6 +401,11 @@ class TestRencode(unittest.TestCase):
             "version number does not match",
         )
 
+    def test_invalid_typecode(self):
+        s = b";\x2f\x7f"
+        with self.assertRaises(ValueError):
+            rencode.loads(s)
+
 
 if __name__ == "__main__":
     unittest.main()
