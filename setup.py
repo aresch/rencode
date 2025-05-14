@@ -24,14 +24,13 @@
 #
 
 import sys
-from distutils.errors import CCompilerError, DistutilsPlatformError
+from setuptools.errors import CCompilerError
 
-from setuptools import setup
-from setuptools.extension import Extension
+from setuptools import setup, Extension
+from Cython.Build import cythonize
 
 try:
     from Cython.Build import build_ext
-    from Cython.Build import cythonize
 except ImportError as ex:
     from setuptools.command.build_ext import build_ext
 
@@ -59,7 +58,7 @@ class optional_build_ext(build_ext):
     def run(self):
         try:
             build_ext.run(self)
-        except DistutilsPlatformError:
+        except OSError:
             _etype, e, _tb = sys.exc_info()
             self._unavailable(e)
 
@@ -85,7 +84,7 @@ available."""
 
 setup(
     name="rencode",
-    version="1.0.6",
+    version="1.0.7",
     packages=["rencode"],
     description="Web safe object pickling/unpickling",
     long_description=open("README.md").read(),
@@ -97,4 +96,5 @@ setup(
     cmdclass={"build_ext": optional_build_ext},
     ext_modules=ext_modules,
     setup_requires=["setuptools"],
+    zip_safe=False,
 )

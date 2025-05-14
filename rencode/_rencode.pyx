@@ -1,7 +1,8 @@
+# cython: language_level=3
 #
 # rencode.pyx
 #
-# Copyright (C) 2010 Andrew Resch <andrewresch@gmail.com>
+# Copyright (C) 2024 Andrew Resch <andrewresch@gmail.com>
 #
 # rencode is free software.
 #
@@ -22,19 +23,11 @@
 #     Boston, MA  02110-1301, USA.
 #
 
-from __future__ import absolute_import
-
-import sys
-
-py3 = sys.version_info[0] >= 3
-if py3:
-    unicode = str
-
 from cpython cimport bool
 from libc.stdlib cimport realloc, free
 from libc.string cimport memcpy
 
-__version__ = ("Cython", 1, 0, 6)
+__version__ = ("Cython", 1, 0, 7)
 
 cdef long long data_length = 0
 cdef bool _decode_utf8 = False
@@ -227,8 +220,7 @@ cdef encode_str(char **buf, unsigned int *pos, bytes x):
         write_buffer(buf, pos, <char *>x, lx)
     else:
         s = str(lx) + ":"
-        if py3:
-            s = s.encode("ascii")
+        s = s.encode("ascii")
         p = s
         write_buffer(buf, pos, p, len(s))
         write_buffer(buf, pos, <char *>x, lx)
@@ -275,7 +267,7 @@ cdef object MIN_SIGNED_LONGLONG = -MAX_SIGNED_LONGLONG
 
 cdef encode(char **buf, unsigned int *pos, data):
     t = type(data)
-    if t == int or t == long:
+    if t == int:
         if -128 <= data < 128:
             encode_char(buf, pos, data)
         elif -32768 <= data < 32768:
@@ -285,9 +277,7 @@ cdef encode(char **buf, unsigned int *pos, data):
         elif MIN_SIGNED_LONGLONG <= data < MAX_SIGNED_LONGLONG:
             encode_long_long(buf, pos, data)
         else:
-            s = str(data)
-            if py3:
-                s = s.encode("ascii")
+            s = str(data).encode("ascii")
             if len(s) >= MAX_INT_LENGTH:
                 raise ValueError("Number is longer than %d characters" % MAX_INT_LENGTH)
             encode_big_number(buf, pos, s)
@@ -298,28 +288,21 @@ cdef encode(char **buf, unsigned int *pos, data):
             encode_float64(buf, pos, data)
         else:
             raise ValueError('Float bits (%d) is not 32 or 64' % _float_bits)
-
     elif t == bytes:
         encode_str(buf, pos, data)
-
-    elif t == unicode:
+    elif t == str:
         u = data.encode("utf8")
         encode_str(buf, pos, u)
-
     elif t == type(None):
         encode_none(buf, pos)
-
     elif t == bool:
         encode_bool(buf, pos, data)
-
     elif t == list or t == tuple:
         encode_list(buf, pos, data)
-
     elif t == dict:
         encode_dict(buf, pos, data)
-
     else:
-        raise Exception("type %s not handled" % t)
+        raise TypeError(f"type {t} not handled")
 
 def dumps(data, float_bits=DEFAULT_FLOAT_BITS):
     """
@@ -535,15 +518,16 @@ def loads(data, decode_utf8=False):
     Decodes the string into an object
 
     :param data: the string to decode
-    :type data: string
+    :type data: bytes
     :param decode_utf8: if True, will attempt to decode all str into unicode
                         objects using utf8
     :type decode_utf8: bool
-
+    :return: The decoded object
+    :rtype: object
     """
     cdef unsigned int pos = 0
     global data_length
     data_length = len(data)
     global _decode_utf8
-    _decode_utf8=decode_utf8
+    _decode_utf8 = decode_utf8
     return decode(data, &pos)
