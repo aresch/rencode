@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "rencode"
-version = "1.0.7"
+version = "1.0.8"
 description = "rencode is an object serialization library similar to bencode from the Bittorrent project."
 authors = ["Andrew Resch <andrewresch@gmail.com>"]
 license = "GPLv3"
@@ -13,14 +13,11 @@ script = "build.py"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-cython = ">=3"
-setuptools = "^80.4.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^21.9b0"
 cython = "^3.1.0"
 pytest = "^8.3.5"
-
 
 [tool.poetry.group.build.dependencies]
 setuptools = "^80.9.0"

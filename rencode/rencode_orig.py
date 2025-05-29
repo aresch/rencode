@@ -63,7 +63,7 @@ import struct
 import sys
 from threading import Lock
 
-__version__ = ("Python", 1, 0, 7)
+__version__ = ("Python", 1, 0, 8)
 __all__ = ("dumps", "loads")
 
 py3 = sys.version_info[0] >= 3
