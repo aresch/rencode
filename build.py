@@ -47,7 +47,8 @@ def build() -> None:
     for output in cmd.get_outputs():
         output = Path(output)
         relative_extension = output.relative_to(cmd.build_lib)
-
+        for so in relative_extension.parent.glob('*.so'):
+            so.unlink()
         shutil.copyfile(output, relative_extension)
         mode = os.stat(relative_extension).st_mode
         mode |= (mode & 0o444) >> 2
