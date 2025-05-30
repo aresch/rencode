@@ -453,6 +453,150 @@ def load_results(filename):
         return json.load(f)
 
 
+# Complex test data structures
+def create_nested_structure(depth=5):
+    """Create a deeply nested structure with mixed types."""
+    if depth == 0:
+        return [1, 2.5, "leaf", True, None]
+    return {
+        "list": [1, 2.5, "string", True, None],
+        "dict": {"key": "value", "num": 42},
+        "nested": create_nested_structure(depth - 1)
+    }
+
+nested_data = create_nested_structure()
+
+def create_large_mixed_collection():
+    """Create a large collection with mixed types."""
+    return {
+        "numbers": [i for i in range(1000)],
+        "floats": [i * 1.5 for i in range(1000)],
+        "strings": [f"string_{i}" for i in range(1000)],
+        "booleans": [True if i % 2 == 0 else False for i in range(1000)],
+        "none_values": [None] * 1000,
+        "mixed": [i if i % 3 == 0 else f"str_{i}" if i % 3 == 1 else i * 1.5 for i in range(1000)]
+    }
+
+large_mixed_data = create_large_mixed_collection()
+
+def create_complex_dict():
+    """Create a complex dictionary with various key types."""
+    return {
+        "string_key": "value",
+        42: "numeric_key",
+        (1, 2, 3): "tuple_key",
+        True: "boolean_key",
+        None: "none_key",
+        b"bytes_key": "bytes_value",
+        -42: "negative_numeric_key",
+        0: "zero_key",
+        "nested": {
+            "inner_string": "inner_value",
+            123: "inner_numeric",
+            (4, 5, 6): "inner_tuple",
+            False: "inner_boolean",
+            b"inner_bytes": "inner_bytes_value"
+        }
+    }
+
+complex_dict_data = create_complex_dict()
+
+def create_large_string_data():
+    """Create large string data with various patterns."""
+    return {
+        "repeated": "a" * 10000,
+        "pattern": "abc" * 1000,
+        "unicode": "你好世界" * 1000,
+        "mixed": "".join(chr(i % 256) for i in range(10000)),
+        "lines": "\n".join(f"Line {i}" for i in range(1000))
+    }
+
+large_string_data = create_large_string_data()
+
+def create_mixed_numeric_collection():
+    """Create a collection with various numeric types."""
+    return {
+        "integers": [i for i in range(-1000, 1000)],
+        "floats": [i * 1.5 for i in range(-1000, 1000)],
+        "mixed": [i if i % 2 == 0 else i * 1.5 for i in range(-1000, 1000)],
+        "large": [2**i for i in range(10)],
+        "small": [2**-i for i in range(10)],
+        "zero": [0, 0.0, -0.0],
+        "infinity": [float('inf'), float('-inf')],
+        "nan": [float('nan')],
+        "precision": [1.23456789, -1.23456789, 0.00000001, -0.00000001]
+    }
+
+mixed_numeric_data = create_mixed_numeric_collection()
+
+# Test functions for complex structures
+def test_encode_nested_structure():
+    rencode.dumps(nested_data)
+
+def test_encode_nested_structure_orig():
+    rencode_orig.dumps(nested_data)
+
+def test_encode_large_mixed_collection():
+    rencode.dumps(large_mixed_data)
+
+def test_encode_large_mixed_collection_orig():
+    rencode_orig.dumps(large_mixed_data)
+
+def test_encode_complex_dict():
+    rencode.dumps(complex_dict_data)
+
+def test_encode_complex_dict_orig():
+    rencode_orig.dumps(complex_dict_data)
+
+def test_encode_large_string_data():
+    rencode.dumps(large_string_data)
+
+def test_encode_large_string_data_orig():
+    rencode_orig.dumps(large_string_data)
+
+def test_encode_mixed_numeric_collection():
+    rencode.dumps(mixed_numeric_data)
+
+def test_encode_mixed_numeric_collection_orig():
+    rencode_orig.dumps(mixed_numeric_data)
+
+# Pre-encode the test data for decode tests
+nested_data_str = rencode_orig.dumps(nested_data)
+large_mixed_data_str = rencode_orig.dumps(large_mixed_data)
+complex_dict_data_str = rencode_orig.dumps(complex_dict_data)
+large_string_data_str = rencode_orig.dumps(large_string_data)
+mixed_numeric_data_str = rencode_orig.dumps(mixed_numeric_data)
+
+def test_decode_nested_structure():
+    rencode.loads(nested_data_str)
+
+def test_decode_nested_structure_orig():
+    rencode_orig.loads(nested_data_str)
+
+def test_decode_large_mixed_collection():
+    rencode.loads(large_mixed_data_str)
+
+def test_decode_large_mixed_collection_orig():
+    rencode_orig.loads(large_mixed_data_str)
+
+def test_decode_complex_dict():
+    rencode.loads(complex_dict_data_str)
+
+def test_decode_complex_dict_orig():
+    rencode_orig.loads(complex_dict_data_str)
+
+def test_decode_large_string_data():
+    rencode.loads(large_string_data_str)
+
+def test_decode_large_string_data_orig():
+    rencode_orig.loads(large_string_data_str)
+
+def test_decode_mixed_numeric_collection():
+    rencode.loads(mixed_numeric_data_str)
+
+def test_decode_mixed_numeric_collection_orig():
+    rencode_orig.loads(mixed_numeric_data_str)
+
 if __name__ == "__main__":
     import timeit
     import argparse
