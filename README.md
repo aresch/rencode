@@ -12,6 +12,8 @@ The rencode module is similar to bencode from the BitTorrent project.  For compl
 
 This version of rencode is a complete rewrite in Cython to attempt to increase the performance over the pure Python module written by Petru Paler, Connelly Barnes et al.
 
+## Data Format
+See [SPEC](SPEC.md)
 
 ## Performance Comparison
 The test program used for these results is included in the repository:
