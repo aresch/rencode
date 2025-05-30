@@ -2,7 +2,7 @@
 #
 # timetest.py
 #
-# Copyright (C) 2010 Andrew Resch <andrewresch@gmail.com>
+# Copyright (C) 2025 Andrew Resch <andrewresch@gmail.com>
 #
 # rencode is free software.
 #
@@ -28,23 +28,8 @@ from rencode import rencode_orig
 
 import sys
 
-# Hack to deal with python 2 and 3 differences with unicode literals.
-if sys.version < "3":
-    import codecs
-
-    def u(x):
-        return codecs.unicode_escape_decode(x)[0]
-
-
-else:
-    unicode = str
-
-    def u(x):
-        return x
-
 
 # Encode functions
-
 
 def test_encode_fixed_pos_int():
     rencode.dumps(40)
@@ -380,10 +365,8 @@ def test_decode_dict_orig():
 overall = [
     b"5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
     b"fixedlength",
-    u("unicodestring"),
-    u(
-        "5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6"
-    ),
+    "unicodestring",
+    "5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
     -10,
     10,
     120,
