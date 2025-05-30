@@ -25,11 +25,14 @@
 
 from rencode import _rencode as rencode
 from rencode import rencode_orig
-
 import sys
-
+import json
+import os
+from datetime import datetime
+import platform
 
 # Encode functions
+
 
 def test_encode_fixed_pos_int():
     rencode.dumps(40)
@@ -402,92 +405,200 @@ def test_overall_decode_orig():
     rencode_orig.loads(overall_decode_str)
 
 
+def get_version_info():
+    """Get version information for both implementations."""
+    try:
+        cython_version = rencode.__version__
+    except AttributeError:
+        cython_version = "unknown"
+
+    try:
+        python_version = rencode_orig.__version__
+    except AttributeError:
+        python_version = "unknown"
+
+    def convert_version(version):
+        return ".".join(map(str, version[1:]))
+
+    return {
+        "cython": convert_version(cython_version),
+        "python": convert_version(python_version),
+    }
+
+
+def save_results(results, filename, use_orig, iterations):
+    """Save test results to a JSON file."""
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "implementation": "python" if use_orig else "cython",
+        "versions": get_version_info(),
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "python": platform.python_version(),
+        },
+        "iterations": iterations,
+        "results": results,
+    }
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def load_results(filename):
+    """Load test results from a JSON file."""
+    with open(filename, "r") as f:
+        return json.load(f)
+
+
 if __name__ == "__main__":
     import timeit
+    import argparse
 
-    iterations = 10000
+    parser = argparse.ArgumentParser(description="Run rencode performance tests")
+    parser.add_argument("--save", help="Save results to specified file")
+    parser.add_argument("--compare", help="Compare against results from specified file")
+    parser.add_argument(
+        "--iterations", type=int, default=10000, help="Number of iterations per test"
+    )
+    parser.add_argument(
+        "--use-orig", action="store_true", help="Use rencode_orig instead of rencode"
+    )
+    parser.add_argument("tests", nargs="*", help="Specific tests to run (default: all)")
+    args = parser.parse_args()
+
+    iterations = args.iterations
+    old_results = None
+
+    # Load comparison data early if specified
+    if args.compare:
+        try:
+            old_results = load_results(args.compare)
+            old_iterations = old_results.get("iterations", iterations)
+
+            # If iterations differ, adjust current run
+            if old_iterations != iterations:
+                print(f"\nWarning: Iteration count mismatch!")
+                print(f"Current: {iterations} iterations")
+                print(f"Previous: {old_iterations} iterations")
+                print("Adjusting current run to match previous iterations...")
+                iterations = old_iterations
+        except FileNotFoundError:
+            print(f"Error: Comparison file {args.compare} not found")
+            sys.exit(1)
+        except json.JSONDecodeError:
+            print(f"Error: Invalid JSON in comparison file {args.compare}")
+            sys.exit(1)
+
     # ANSI escape codes
-    CSI = "\x1B["
+    CSI = "\x1b["
     reset = CSI + "m"
 
     def do_test(func):
         print("%s:" % func)
-        new_time = timeit.Timer("%s()" % func, "from __main__ import %s" % func).timeit(
+        time = timeit.Timer("%s()" % func, "from __main__ import %s" % func).timeit(
             iterations
         )
-        orig_time = timeit.Timer(
-            "%s_orig()" % func, "from __main__ import %s_orig" % func
-        ).timeit(iterations)
-        if new_time > orig_time:
-            new = CSI + "31m%.3fs%s" % (new_time, reset)
-            orig = CSI + "32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (
-                orig_time,
-                reset,
-                CSI,
-                new_time - orig_time,
-                reset,
-                (new_time / orig_time) * 100,
-            )
-        else:
-            new = CSI + "32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (
-                new_time,
-                reset,
-                CSI,
-                orig_time - new_time,
-                reset,
-                (orig_time / new_time) * 100,
-            )
-            orig = CSI + "31m%.3fs%s" % (orig_time, reset)
+        print("\t%.3fs" % time)
+        return time
 
-        print("\trencode.pyx: %s" % new)
-        print("\trencode.py:  %s" % orig)
-        print("")
-        return (new_time, orig_time)
+    results = {}
 
-    if len(sys.argv) == 1:
-        loc = list(locals().keys())
-
-        for t in ("encode", "decode", "overall"):
-            print("*" * 79)
-            print("%s functions:" % (t.title()))
-            print("*" * 79)
-            print("")
-
-            total_new = 0.0
-            total_orig = 0.0
-            for func in loc:
-                if func.startswith("test_%s" % t) and not func.endswith("_orig"):
-                    n, o = do_test(func)
-                    total_new += n
-                    total_orig += o
-
-            print("%s functions totals:" % (t.title()))
-            if total_new > total_orig:
-                new = CSI + "31m%.3fs%s" % (total_new, reset)
-                orig = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (
-                    CSI,
-                    total_orig,
-                    reset,
-                    CSI,
-                    total_new - total_orig,
-                    reset,
-                    (total_new / total_orig) * 100,
-                )
-            else:
-                new = "%s32m%.3fs%s (%s34m+%.3fs%s) %.2f%%" % (
-                    CSI,
-                    total_new,
-                    reset,
-                    CSI,
-                    total_orig - total_new,
-                    reset,
-                    (total_orig / total_new) * 100,
-                )
-                orig = CSI + "31m%.3fs%s" % (total_orig, reset)
-
-            print("\trencode.pyx: %s" % new)
-            print("\trencode.py:  %s" % orig)
-            print("")
+    if args.tests:
+        test_funcs = args.tests
     else:
-        for f in sys.argv[1:]:
-            do_test(f)
+        loc = list(locals().keys())
+        if args.use_orig:
+            test_funcs = [
+                f for f in loc if f.startswith("test_") and f.endswith("_orig")
+            ]
+        else:
+            test_funcs = [
+                f for f in loc if f.startswith("test_") and not f.endswith("_orig")
+            ]
+
+    for t in ("encode", "decode", "overall"):
+        print("*" * 79)
+        print("%s functions:" % (t.title()))
+        print("*" * 79)
+        print("")
+
+        total_time = 0.0
+        category_results = {}
+
+        for func in test_funcs:
+            if func.startswith("test_%s" % t):
+                time = do_test(func)
+                total_time += time
+                # Strip _orig from the function name when saving results
+                result_name = func.removesuffix("_orig") if args.use_orig else func
+                category_results[result_name] = time
+
+        results[t] = category_results
+
+        print("%s functions total: %.3fs" % (t.title(), total_time))
+        print("")
+
+    if args.save:
+        save_results(results, args.save, args.use_orig, iterations)
+        print(f"Results saved to {args.save}")
+
+    if args.compare and old_results:
+        print(f"\nComparing with {args.compare}:")
+        print("*" * 79)
+
+        # Print version information
+        print("\nVersion Information:")
+        print("-" * 40)
+        current_impl = "python" if args.use_orig else "cython"
+        current_versions = get_version_info()
+        old_impl = old_results.get("implementation", "unknown")
+        old_versions = old_results.get("versions", {})
+
+        print(
+            f"Current: {current_impl} {current_versions.get(current_impl, 'unknown')}"
+        )
+        print(f"Previous: {old_impl} {old_versions.get(old_impl, 'unknown')}")
+        print("\nPlatform Information:")
+        print(
+            f"Current: {platform.system()} {platform.release()} ({platform.machine()})"
+        )
+        print(
+            f"Previous: {old_results.get('platform', {}).get('system', 'unknown')} "
+            f"{old_results.get('platform', {}).get('release', 'unknown')} "
+            f"({old_results.get('platform', {}).get('machine', 'unknown')})"
+        )
+        print(f"\nIterations: {iterations}")
+        print("\nResults Comparison:")
+        print("-" * 79)
+        print(
+            f"{'Test Name':<40} {'Current':>10} {'Previous':>10} {'Diff':>10} {'%':>8} {'Speed':>8}"
+        )
+        print("-" * 79)
+
+        old_results_data = old_results.get("results", {})
+        for category in results:
+            if category in old_results_data:
+                print(f"\n{category.title()} functions:")
+                print("-" * 79)
+                for test in results[category]:
+                    if test in old_results_data[category]:
+                        old_time = old_results_data[category][test]
+                        new_time = results[category][test]
+                        diff = new_time - old_time
+                        percent = (new_time / old_time) * 100
+                        speed_ratio = old_time / new_time
+
+                        # Format the test name to be more readable
+                        test_name = test.removeprefix("test_")
+
+                        if new_time > old_time:
+                            print(
+                                f"{test_name:<40} {CSI}31m{new_time:>10.3f}s{reset} {CSI}32m{old_time:>10.3f}s{reset} {CSI}34m+{diff:>9.3f}s{reset} {CSI}31m{percent:>7.1f}%{reset} {CSI}31m{speed_ratio:>7.1f}x{reset}"
+                            )
+                        else:
+                            print(
+                                f"{test_name:<40} {CSI}32m{new_time:>10.3f}s{reset} {CSI}31m{old_time:>10.3f}s{reset} {CSI}34m-{abs(diff):>9.3f}s{reset} {CSI}32m{percent:>7.1f}%{reset} {CSI}32m{speed_ratio:>7.1f}x{reset}"
+                            )
