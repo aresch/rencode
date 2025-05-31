@@ -30,379 +30,191 @@ import json
 import os
 from datetime import datetime
 import platform
-
-# Encode functions
-
-
-def test_encode_fixed_pos_int():
-    rencode.dumps(40)
-
-
-def test_encode_fixed_pos_int_orig():
-    rencode_orig.dumps(40)
-
-
-def test_encode_fixed_neg_int():
-    rencode.dumps(-29)
-
-
-def test_encode_fixed_neg_int_orig():
-    rencode_orig.dumps(-29)
-
-
-def test_encode_int_char_size():
-    rencode.dumps(100)
-    rencode.dumps(-100)
-
-
-def test_encode_int_char_size_orig():
-    rencode_orig.dumps(100)
-    rencode_orig.dumps(-100)
-
-
-def test_encode_int_short_size():
-    rencode.dumps(27123)
-    rencode.dumps(-27123)
-
-
-def test_encode_int_short_size_orig():
-    rencode_orig.dumps(27123)
-    rencode_orig.dumps(-27123)
-
-
-def test_encode_int_int_size():
-    rencode.dumps(7483648)
-    rencode.dumps(-7483648)
-
-
-def test_encode_int_int_size_orig():
-    rencode_orig.dumps(7483648)
-    rencode_orig.dumps(-7483648)
-
-
-def test_encode_int_long_long_size():
-    rencode.dumps(8223372036854775808)
-    rencode.dumps(-8223372036854775808)
-
-
-def test_encode_int_long_long_size_orig():
-    rencode_orig.dumps(8223372036854775808)
-    rencode_orig.dumps(-8223372036854775808)
-
-
-bn = int("9" * 62)
-
-
-def test_encode_int_big_number():
-    rencode.dumps(bn)
-
-
-def test_encode_int_big_number_orig():
-    rencode_orig.dumps(bn)
-
-
-def test_encode_float_32bit():
-    rencode.dumps(1234.56)
-
-
-def test_encode_float_32bit_orig():
-    rencode_orig.dumps(1234.56)
-
-
-def test_encode_float_64bit():
-    rencode.dumps(1234.56, 64)
-
-
-def test_encode_float_64bit_orig():
-    rencode_orig.dumps(1234.56, 64)
-
-
-def test_encode_fixed_str():
-    rencode.dumps(b"foobarbaz")
-
-
-def test_encode_fixed_str_orig():
-    rencode_orig.dumps(b"foobarbaz")
-
-
-s = b"f" * 255
-
-
-def test_encode_str():
-    rencode.dumps(s)
-
-
-def test_encode_str_orig():
-    rencode_orig.dumps(s)
-
-
-def test_encode_none():
-    rencode.dumps(None)
-
-
-def test_encode_none_orig():
-    rencode_orig.dumps(None)
-
-
-def test_encode_bool():
-    rencode.dumps(True)
-
-
-def test_encode_bool_orig():
-    rencode_orig.dumps(True)
-
-
-l = [None, None, None, None]
-
-
-def test_encode_fixed_list():
-    rencode.dumps(l)
-
-
-def test_encode_fixed_list_orig():
-    rencode_orig.dumps(l)
-
-
-ll = [None] * 80
-
-
-def test_encode_list():
-    rencode.dumps(ll)
-
-
-def test_encode_list_orig():
-    rencode_orig.dumps(ll)
-
-
-keys = b"abcdefghijk"
-d = dict(zip(keys, [None] * len(keys)))
-
-
-def test_encode_fixed_dict():
-    rencode.dumps(d)
-
-
-def test_encode_fixed_dict_orig():
-    rencode_orig.dumps(d)
-
-
-keys2 = b"abcdefghijklmnopqrstuvwxyz1234567890"
-d2 = dict(zip(keys2, [None] * len(keys2)))
-
-
-def test_encode_dict():
-    rencode.dumps(d2)
-
-
-def test_encode_dict_orig():
-    rencode_orig.dumps(d2)
-
-
-# Decode functions
-
-
-def test_decode_fixed_pos_int():
-    rencode.loads(b"(")
-
-
-def test_decode_fixed_pos_int_orig():
-    rencode_orig.loads(b"(")
-
-
-def test_decode_fixed_neg_int():
-    rencode.loads(b"b")
-
-
-def test_decode_fixed_neg_int_orig():
-    rencode_orig.loads(b"b")
-
-
-def test_decode_int_char_size():
-    rencode.loads(b">d")
-    rencode.loads(b">\x9c")
-
-
-def test_decode_int_char_size_orig():
-    rencode_orig.loads(b">d")
-    rencode_orig.loads(b">\x9c")
-
-
-def test_decode_int_short_size():
-    rencode.loads(b"?i\xf3")
-    rencode.loads(b"?\x96\r")
-
-
-def test_decode_int_short_size_orig():
-    rencode_orig.loads(b"?i\xf3")
-    rencode_orig.loads(b"?\x96\r")
-
-
-def test_decode_int_int_size():
-    rencode.loads(b"@\x00r1\x00")
-    rencode.loads(b"@\xff\x8d\xcf\x00")
-
-
-def test_decode_int_int_size_orig():
-    rencode_orig.loads(b"@\x00r1\x00")
-    rencode_orig.loads(b"@\xff\x8d\xcf\x00")
-
-
-def test_decode_int_long_long_size():
-    rencode.loads(b"Ar\x1fILX\x9c\x00\x00")
-    rencode.loads(b"A\x8d\xe0\xb6\xb3\xa7d\x00\x00")
-
-
-def test_decode_int_long_long_size_orig():
-    rencode_orig.loads(b"Ar\x1fILX\x9c\x00\x00")
-    rencode_orig.loads(b"A\x8d\xe0\xb6\xb3\xa7d\x00\x00")
-
-
-def test_decode_int_big_number():
-    rencode.loads(
-        b"=99999999999999999999999999999999999999999999999999999999999999\x7f"
-    )
-
-
-def test_decode_int_big_number_orig():
-    rencode_orig.loads(
-        b"=99999999999999999999999999999999999999999999999999999999999999\x7f"
-    )
-
-
-def test_decode_float_32bit():
-    rencode.loads(b"BD\x9aQ\xec")
-
-
-def test_decode_float_32bit_orig():
-    rencode_orig.loads(b"BD\x9aQ\xec")
-
-
-def test_decode_float_64bit():
-    rencode.loads(b",@\x93J=p\xa3\xd7\n")
-
-
-def test_decode_float_64bit_orig():
-    rencode_orig.loads(b",@\x93J=p\xa3\xd7\n")
-
-
-def test_decode_fixed_str():
-    rencode.loads(b"\x89foobarbaz")
-
-
-def test_decode_fixed_str_orig():
-    rencode_orig.loads(b"\x89foobarbaz")
-
-
-def test_decode_str():
-    rencode.loads(
-        b"255:fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    )
-
-
-def test_decode_str_orig():
-    rencode_orig.loads(
-        b"255:fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    )
-
-
-def test_decode_none():
-    rencode.loads(b"E")
-
-
-def test_decode_none_orig():
-    rencode_orig.loads(b"E")
-
-
-def test_decode_bool():
-    rencode.loads(b"C")
-
-
-def test_decode_bool_orig():
-    rencode_orig.loads(b"C")
-
-
-def test_decode_fixed_list():
-    rencode.loads(b"\xc4EEEE")
-
-
-def test_decode_fixed_list_orig():
-    rencode_orig.loads(b"\xc4EEEE")
-
-
-def test_decode_list():
-    rencode.loads(
-        b";EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\x7f"
-    )
-
-
-def test_decode_list_orig():
-    rencode_orig.loads(
-        b";EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\x7f"
-    )
-
-
-def test_decode_fixed_dict():
-    rencode.loads(
-        b"q\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE"
-    )
-
-
-def test_decode_fixed_dict_orig():
-    rencode_orig.loads(
-        b"q\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE"
-    )
-
-
-def test_decode_dict():
-    rencode.loads(
-        b"<\x811E\x810E\x813E\x812E\x815E\x814E\x817E\x816E\x819E\x818E\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE\x81mE\x81lE\x81oE\x81nE\x81qE\x81pE\x81sE\x81rE\x81uE\x81tE\x81wE\x81vE\x81yE\x81xE\x81zE\x7f"
-    )
-
-
-def test_decode_dict_orig():
-    rencode_orig.loads(
-        b"<\x811E\x810E\x813E\x812E\x815E\x814E\x817E\x816E\x819E\x818E\x81aE\x81cE\x81bE\x81eE\x81dE\x81gE\x81fE\x81iE\x81hE\x81kE\x81jE\x81mE\x81lE\x81oE\x81nE\x81qE\x81pE\x81sE\x81rE\x81uE\x81tE\x81wE\x81vE\x81yE\x81xE\x81zE\x7f"
-    )
-
-
-overall = [
-    b"5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
-    b"fixedlength",
-    "unicodestring",
-    "5ce750f0954ce1537676c7a5fe38b0de30ba7eb65ce750f0954ce1537676c7a5fe38b0de30ba7eb6",
-    -10,
-    10,
-    120,
-    15600,
-    -15600,
-    7483648,
-    -7483648,
-    8223372036854775808,
-    -8223372036854775808,
-    int("9" * 62),
-    1227688834.643409,
-    None,
-    True,
+import timeit
+import argparse
+import functools
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Union
+
+
+@dataclass
+class TestCase:
+    name: str
+    data: Any
+    scale_factor: float = 1.0
+
+
+# Complex test data structures
+def create_nested_structure(depth=5):
+    """Create a deeply nested structure with mixed types."""
+    if depth == 0:
+        return [1, 2.5, "leaf", True, None]
+    return {
+        "list": [1, 2.5, "string", True, None],
+        "dict": {"key": "value", "num": 42},
+        "nested": create_nested_structure(depth - 1),
+    }
+
+
+def create_large_mixed_collection():
+    """Create a large collection with mixed types."""
+    return {
+        "numbers": [i for i in range(1000)],
+        "floats": [i * 1.5 for i in range(1000)],
+        "strings": [f"string_{i}" for i in range(1000)],
+        "booleans": [True if i % 2 == 0 else False for i in range(1000)],
+        "none_values": [None] * 1000,
+        "mixed": [
+            i if i % 3 == 0 else f"str_{i}" if i % 3 == 1 else i * 1.5
+            for i in range(1000)
+        ],
+    }
+
+
+def create_complex_dict():
+    """Create a complex dictionary with various key types."""
+    return {
+        "string_key": "value",
+        42: "numeric_key",
+        (1, 2, 3): "tuple_key",
+        True: "boolean_key",
+        None: "none_key",
+        b"bytes_key": "bytes_value",
+        -42: "negative_numeric_key",
+        0: "zero_key",
+        "nested": {
+            "inner_string": "inner_value",
+            123: "inner_numeric",
+            (4, 5, 6): "inner_tuple",
+            False: "inner_boolean",
+            b"inner_bytes": "inner_bytes_value",
+        },
+    }
+
+
+def create_large_string_data():
+    """Create large string data with various patterns."""
+    return {
+        "repeated": "a" * 10000,
+        "pattern": "abc" * 1000,
+        "unicode": "你好世界" * 1000,
+        "mixed": "".join(chr(i % 256) for i in range(10000)),
+        "lines": "\n".join(f"Line {i}" for i in range(1000)),
+    }
+
+
+def create_mixed_numeric_collection():
+    """Create a collection with various numeric types."""
+    return {
+        "integers": [i for i in range(-1000, 1000)],
+        "floats": [i * 1.5 for i in range(-1000, 1000)],
+        "mixed": [i if i % 2 == 0 else i * 1.5 for i in range(-1000, 1000)],
+        "large": [2**i for i in range(10)],
+        "small": [2**-i for i in range(10)],
+        "zero": [0, 0.0, -0.0],
+        "infinity": [float("inf"), float("-inf")],
+        "nan": [float("nan")],
+        "precision": [1.23456789, -1.23456789, 0.00000001, -0.00000001],
+    }
+
+
+# Create test data
+nested_data = create_nested_structure()
+large_mixed_data = create_large_mixed_collection()
+complex_dict_data = create_complex_dict()
+large_string_data = create_large_string_data()
+mixed_numeric_data = create_mixed_numeric_collection()
+
+# Small test cases
+SMALL_TESTS = [
+    # Fixed positive integers
+    TestCase("fixed_pos_int", 40),
+    TestCase("fixed_neg_int", -29),
+    TestCase("int_char_size", 100),
+    TestCase("int_short_size", 27123),
+    TestCase("int_int_size", 7483648),
+    TestCase("int_long_long_size", 8223372036854775808),
+    TestCase("float_32bit", 1234.56),
+    TestCase("float_64bit", 1234.56),
+    TestCase("fixed_str", b"foobarbaz"),
+    TestCase("str", b"f" * 255),
+    TestCase("none", None),
+    TestCase("bool", True),
+    TestCase("fixed_list", [None] * 4),
+    TestCase("list", [None] * 80),
+    TestCase("fixed_dict", dict(zip(b"abcdefghijk", [None] * 11))),
+    TestCase("dict", dict(zip(b"abcdefghijklmnopqrstuvwxyz1234567890", [None] * 36))),
+]
+
+# Large test cases
+LARGE_TESTS = [
+    TestCase("large_mixed_collection", large_mixed_data, 0.01),
+    TestCase("nested_structure", nested_data, 0.01),
+    TestCase("complex_dict", complex_dict_data, 0.01),
+    TestCase("large_string_data", large_string_data, 0.01),
+    TestCase("mixed_numeric_collection", mixed_numeric_data, 0.01),
 ]
 
 
-def test_overall_encode():
-    rencode.dumps(overall)
+def create_test_functions(test_case: TestCase, use_orig: bool) -> Dict[str, Callable]:
+    """Create encode and decode test functions for the given test case."""
+    test_functions = {}
+
+    # Create encode test
+    def encode_test():
+        if use_orig:
+            rencode_orig.dumps(test_case.data)
+        else:
+            rencode.dumps(test_case.data)
+
+    encode_test.is_large_test = test_case.scale_factor != 1.0
+    encode_test.scale_factor = test_case.scale_factor
+    encode_test.__name__ = f"test_encode_{test_case.name}"
+    if use_orig:
+        encode_test.__name__ += "_orig"
+    test_functions["encode"] = encode_test
+
+    # Pre-encode the data for decode test
+    encoded_data = (
+        rencode_orig.dumps(test_case.data)
+        if use_orig
+        else rencode.dumps(test_case.data)
+    )
+
+    # Create decode test
+    def decode_test():
+        if use_orig:
+            rencode_orig.loads(encoded_data)
+        else:
+            rencode.loads(encoded_data)
+
+    decode_test.is_large_test = test_case.scale_factor != 1.0
+    decode_test.scale_factor = test_case.scale_factor
+    decode_test.__name__ = f"test_decode_{test_case.name}"
+    if use_orig:
+        decode_test.__name__ += "_orig"
+    test_functions["decode"] = decode_test
+
+    return test_functions
 
 
-def test_overall_encode_orig():
-    rencode_orig.dumps(overall)
+def get_test_functions(use_orig: bool) -> Dict[str, List[Callable]]:
+    """Get all test functions organized by category."""
+    test_functions = {"encode": [], "decode": []}
 
+    # Add small tests
+    for test_case in SMALL_TESTS:
+        funcs = create_test_functions(test_case, use_orig)
+        test_functions["encode"].append(funcs["encode"])
+        test_functions["decode"].append(funcs["decode"])
 
-overall_decode_str = rencode_orig.dumps(overall)
+    # Add large tests
+    for test_case in LARGE_TESTS:
+        funcs = create_test_functions(test_case, use_orig)
+        test_functions["encode"].append(funcs["encode"])
+        test_functions["decode"].append(funcs["decode"])
 
-
-def test_overall_decode():
-    rencode.loads(overall_decode_str)
-
-
-def test_overall_decode_orig():
-    rencode_orig.loads(overall_decode_str)
+    return test_functions
 
 
 def get_version_info():
@@ -453,113 +265,6 @@ def load_results(filename):
         return json.load(f)
 
 
-# Complex test data structures
-def create_nested_structure(depth=5):
-    """Create a deeply nested structure with mixed types."""
-    if depth == 0:
-        return [1, 2.5, "leaf", True, None]
-    return {
-        "list": [1, 2.5, "string", True, None],
-        "dict": {"key": "value", "num": 42},
-        "nested": create_nested_structure(depth - 1)
-    }
-
-nested_data = create_nested_structure()
-
-def create_large_mixed_collection():
-    """Create a large collection with mixed types."""
-    return {
-        "numbers": [i for i in range(1000)],
-        "floats": [i * 1.5 for i in range(1000)],
-        "strings": [f"string_{i}" for i in range(1000)],
-        "booleans": [True if i % 2 == 0 else False for i in range(1000)],
-        "none_values": [None] * 1000,
-        "mixed": [i if i % 3 == 0 else f"str_{i}" if i % 3 == 1 else i * 1.5 for i in range(1000)]
-    }
-
-large_mixed_data = create_large_mixed_collection()
-
-def create_complex_dict():
-    """Create a complex dictionary with various key types."""
-    return {
-        "string_key": "value",
-        42: "numeric_key",
-        (1, 2, 3): "tuple_key",
-        True: "boolean_key",
-        None: "none_key",
-        b"bytes_key": "bytes_value",
-        -42: "negative_numeric_key",
-        0: "zero_key",
-        "nested": {
-            "inner_string": "inner_value",
-            123: "inner_numeric",
-            (4, 5, 6): "inner_tuple",
-            False: "inner_boolean",
-            b"inner_bytes": "inner_bytes_value"
-        }
-    }
-
-complex_dict_data = create_complex_dict()
-
-def create_large_string_data():
-    """Create large string data with various patterns."""
-    return {
-        "repeated": "a" * 10000,
-        "pattern": "abc" * 1000,
-        "unicode": "你好世界" * 1000,
-        "mixed": "".join(chr(i % 256) for i in range(10000)),
-        "lines": "\n".join(f"Line {i}" for i in range(1000))
-    }
-
-large_string_data = create_large_string_data()
-
-def create_mixed_numeric_collection():
-    """Create a collection with various numeric types."""
-    return {
-        "integers": [i for i in range(-1000, 1000)],
-        "floats": [i * 1.5 for i in range(-1000, 1000)],
-        "mixed": [i if i % 2 == 0 else i * 1.5 for i in range(-1000, 1000)],
-        "large": [2**i for i in range(10)],
-        "small": [2**-i for i in range(10)],
-        "zero": [0, 0.0, -0.0],
-        "infinity": [float('inf'), float('-inf')],
-        "nan": [float('nan')],
-        "precision": [1.23456789, -1.23456789, 0.00000001, -0.00000001]
-    }
-
-mixed_numeric_data = create_mixed_numeric_collection()
-
-# Test functions for complex structures
-def test_encode_nested_structure():
-    rencode.dumps(nested_data)
-
-def test_encode_nested_structure_orig():
-    rencode_orig.dumps(nested_data)
-
-def test_encode_large_mixed_collection():
-    rencode.dumps(large_mixed_data)
-
-def test_encode_large_mixed_collection_orig():
-    rencode_orig.dumps(large_mixed_data)
-
-def test_encode_complex_dict():
-    rencode.dumps(complex_dict_data)
-
-def test_encode_complex_dict_orig():
-    rencode_orig.dumps(complex_dict_data)
-
-def test_encode_large_string_data():
-    rencode.dumps(large_string_data)
-
-def test_encode_large_string_data_orig():
-    rencode_orig.dumps(large_string_data)
-
-def test_encode_mixed_numeric_collection():
-    rencode.dumps(mixed_numeric_data)
-
-def test_encode_mixed_numeric_collection_orig():
-    rencode_orig.dumps(mixed_numeric_data)
-
 # Pre-encode the test data for decode tests
 nested_data_str = rencode_orig.dumps(nested_data)
 large_mixed_data_str = rencode_orig.dumps(large_mixed_data)
@@ -567,45 +272,13 @@ complex_dict_data_str = rencode_orig.dumps(complex_dict_data)
 large_string_data_str = rencode_orig.dumps(large_string_data)
 mixed_numeric_data_str = rencode_orig.dumps(mixed_numeric_data)
 
-def test_decode_nested_structure():
-    rencode.loads(nested_data_str)
-
-def test_decode_nested_structure_orig():
-    rencode_orig.loads(nested_data_str)
-
-def test_decode_large_mixed_collection():
-    rencode.loads(large_mixed_data_str)
-
-def test_decode_large_mixed_collection_orig():
-    rencode_orig.loads(large_mixed_data_str)
-
-def test_decode_complex_dict():
-    rencode.loads(complex_dict_data_str)
-
-def test_decode_complex_dict_orig():
-    rencode_orig.loads(complex_dict_data_str)
-
-def test_decode_large_string_data():
-    rencode.loads(large_string_data_str)
-
-def test_decode_large_string_data_orig():
-    rencode_orig.loads(large_string_data_str)
-
-def test_decode_mixed_numeric_collection():
-    rencode.loads(mixed_numeric_data_str)
-
-def test_decode_mixed_numeric_collection_orig():
-    rencode_orig.loads(mixed_numeric_data_str)
 
 if __name__ == "__main__":
-    import timeit
-    import argparse
-
     parser = argparse.ArgumentParser(description="Run rencode performance tests")
     parser.add_argument("--save", help="Save results to specified file")
     parser.add_argument("--compare", help="Compare against results from specified file")
     parser.add_argument(
-        "--iterations", type=int, default=10000, help="Number of iterations per test"
+        "--iterations", type=int, default=1000000, help="Number of iterations per test"
     )
     parser.add_argument(
         "--use-orig", action="store_true", help="Use rencode_orig instead of rencode"
@@ -641,49 +314,54 @@ if __name__ == "__main__":
     reset = CSI + "m"
 
     def do_test(func):
-        print("%s:" % func)
-        time = timeit.Timer("%s()" % func, "from __main__ import %s" % func).timeit(
-            iterations
-        )
+        print("%s:" % func.__name__)
+        # Calculate iterations based on whether it's a large test
+        test_iterations = iterations
+        if hasattr(func, "is_large_test") and func.is_large_test:
+            test_iterations = int(iterations * func.scale_factor)
+            print(f"\tUsing {test_iterations} iterations (scaled from {iterations})")
+
+        time = timeit.Timer(func).timeit(test_iterations)
         print("\t%.3fs" % time)
         return time
 
     results = {}
+    total_time = 0.0
 
+    # Get test functions
+    test_functions = get_test_functions(args.use_orig)
+
+    # Filter tests if specific tests are requested
     if args.tests:
-        test_funcs = args.tests
-    else:
-        loc = list(locals().keys())
-        if args.use_orig:
-            test_funcs = [
-                f for f in loc if f.startswith("test_") and f.endswith("_orig")
-            ]
-        else:
-            test_funcs = [
-                f for f in loc if f.startswith("test_") and not f.endswith("_orig")
+        for category in test_functions:
+            test_functions[category] = [
+                f for f in test_functions[category] if f.__name__ in args.tests
             ]
 
-    for t in ("encode", "decode", "overall"):
+    for category, funcs in test_functions.items():
         print("*" * 79)
-        print("%s functions:" % (t.title()))
+        print("%s functions:" % (category.title()))
         print("*" * 79)
         print("")
 
-        total_time = 0.0
+        category_time = 0.0
         category_results = {}
 
-        for func in test_funcs:
-            if func.startswith("test_%s" % t):
-                time = do_test(func)
-                total_time += time
-                # Strip _orig from the function name when saving results
-                result_name = func.removesuffix("_orig") if args.use_orig else func
-                category_results[result_name] = time
+        for func in funcs:
+            time = do_test(func)
+            category_time += time
+            total_time += time
+            category_results[func.__name__] = time
 
-        results[t] = category_results
+        results[category] = category_results
 
-        print("%s functions total: %.3fs" % (t.title(), total_time))
+        print("%s functions total: %.3fs" % (category.title(), category_time))
         print("")
+
+    print("*" * 79)
+    print("Total time: %.3fs" % total_time)
+    print("*" * 79)
+    print("")
 
     if args.save:
         save_results(results, args.save, args.use_orig, iterations)
