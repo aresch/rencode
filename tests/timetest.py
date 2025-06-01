@@ -170,8 +170,6 @@ def create_test_functions(test_case: TestCase, use_orig: bool) -> Dict[str, Call
     encode_test.is_large_test = test_case.scale_factor != 1.0
     encode_test.scale_factor = test_case.scale_factor
     encode_test.__name__ = f"test_encode_{test_case.name}"
-    if use_orig:
-        encode_test.__name__ += "_orig"
     test_functions["encode"] = encode_test
 
     # Pre-encode the data for decode test
@@ -191,8 +189,6 @@ def create_test_functions(test_case: TestCase, use_orig: bool) -> Dict[str, Call
     decode_test.is_large_test = test_case.scale_factor != 1.0
     decode_test.scale_factor = test_case.scale_factor
     decode_test.__name__ = f"test_decode_{test_case.name}"
-    if use_orig:
-        decode_test.__name__ += "_orig"
     test_functions["decode"] = decode_test
 
     return test_functions
