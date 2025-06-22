@@ -12,9 +12,6 @@ from setuptools import Extension
 from setuptools.command.build_ext import build_ext
 
 COMPILE_ARGS = ["-O3"]
-# x86_64 on linux, AMD64 on Windows
-if platform.machine() in ['x86_64', 'AMD64']:
-    COMPILE_ARGS += ["-march=native", "-msse", "-msse2", "-mfma", "-mfpmath=sse"]
 
 LINK_ARGS: list[str] = []
 INCLUDE_DIRS: list[str] = []
