@@ -10,8 +10,6 @@ from setuptools import Distribution
 from setuptools import Extension
 from setuptools.command.build_ext import build_ext
 
-COMPILE_ARGS = ["-O3"]
-
 LINK_ARGS: list[str] = []
 INCLUDE_DIRS: list[str] = []
 LIBRARIES: list[str] = []
@@ -22,7 +20,6 @@ def build() -> None:
         Extension(
             "*",
             ["rencode/*.pyx"],
-            extra_compile_args=COMPILE_ARGS,
             extra_link_args=LINK_ARGS,
             include_dirs=INCLUDE_DIRS,
             libraries=LIBRARIES,
