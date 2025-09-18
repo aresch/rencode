@@ -162,13 +162,13 @@ class TestRencode(unittest.TestCase):
         self.assertRaises(ValueError, rencode.loads, toobig)
 
     def test_decode_float_32bit(self):
-        f = rencode.dumps(1234.56)
-        self.assertEqual(rencode.loads(f), rencode_orig.loads(f))
+        f = rencode.dumps(1234.5)
+        self.assertEqual(rencode.loads(f), 1234.5)
         self.assertRaises(IndexError, rencode.loads, bytes(bytearray([66])))
 
     def test_decode_float_64bit(self):
-        f = rencode.dumps(1234.56, 64)
-        self.assertEqual(rencode.loads(f), rencode_orig.loads(f))
+        f = rencode.dumps(1234.5, 64)
+        self.assertEqual(rencode.loads(f), 1234.5)
         self.assertRaises(IndexError, rencode.loads, bytes(bytearray([44])))
 
     def test_decode_fixed_bytes(self):
@@ -391,12 +391,9 @@ class TestRencode(unittest.TestCase):
         self.assertRaises(UnicodeDecodeError, rencode.loads, s, decode_utf8=True)
 
     def test_version_exposed(self):
-        assert rencode.__version__
-        assert rencode_orig.__version__
         self.assertEqual(
             rencode.__version__[1:],
-            rencode_orig.__version__[1:],
-            "version number does not match",
+            ("Cython", 1, 0, 8)[1:],
         )
 
     def test_invalid_typecode(self):
