@@ -1,29 +1,62 @@
-[tool.poetry]
+[project]
 name = "rencode"
 version = "1.0.8"
 description = "rencode is an object serialization library similar to bencode from the Bittorrent project."
-authors = ["Andrew Resch <andrewresch@gmail.com>"]
-license = "GPLv3"
-include = [{path = "rencode/*.so", format = "wheel"}, {path = "rencode/*.c", format = "sdist"}]
-packages = [{include = "rencode"}]
-exclude = ['rencode/*.c']
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.9"
+authors = [
+    {name = "Andrew Resch", email = "andrewresch@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Cython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
 
-[tool.poetry.build]
-script = "build.py"
+[project.urls]
+Homepage = "https://github.com/aresch/rencode"
+Repository = "https://github.com/aresch/rencode"
+Issues = "https://github.com/aresch/rencode/issues"
 
-[tool.poetry.dependencies]
-python = "^3.9"
+[project.optional-dependencies]
+dev = [
+    "cython>=3.0.0",
+    "pytest>=8.0.0",
+    "black>=24.0.0",
+    "line-profiler>=4.2.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-black = "^21.9b0"
-cython = "^3.1.0"
-pytest = "^8.3.5"
-
-[tool.poetry.group.build.dependencies]
-setuptools = "^80.9.0"
-cython = "^3.1.1"
-poetry-core = "^2.1.3"
+[dependency-groups]
+dev = [
+    "cython>=3.0.0",
+    "pytest>=8.0.0",
+    "black>=24.0.0",
+    "line-profiler>=4.2.0",
+]
 
 [build-system]
-requires = ["poetry-core", "setuptools", "cython"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=64.0.0", "cython>=3.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rencode*"]
+
+[tool.setuptools.exclude-package-data]
+rencode = ["*.c", "*.pyx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

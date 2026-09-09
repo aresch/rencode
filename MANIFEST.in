@@ -1,5 +1,5 @@
 include COPYING
 include README.md
+include SPEC.md
 include tests/*.py
-include rencode/rencode.c
 include rencode/_rencode.pyx
