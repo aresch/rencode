@@ -1,6 +1,6 @@
 [project]
 name = "rencode"
-version = "1.0.8"
+version = "1.0.9"
 description = "rencode is an object serialization library similar to bencode from the Bittorrent project."
 readme = "README.md"
 license = "GPL-3.0-only"
