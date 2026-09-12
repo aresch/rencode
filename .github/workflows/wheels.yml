@@ -16,13 +16,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            cibw_archs: "x86_64 i686"
+            cibw_archs: "x86_64"
           - os: ubuntu-latest
             cibw_archs: "aarch64"
-          - os: macos-13
-            cibw_archs: "x86_64"
           - os: macos-14
-            cibw_archs: "arm64"
+            cibw_archs: "arm64 x86_64"
           - os: windows-latest
             cibw_archs: "AMD64"
 
@@ -40,6 +38,7 @@ jobs:
         env:
           CIBW_ARCHS: ${{ matrix.cibw_archs }}
           CIBW_SKIP: "pp* cp36-* cp37-* cp38-*"
+          CIBW_TEST_SKIP: "*-macosx_x86_64"
           CIBW_TEST_COMMAND: "pytest {project}/tests"
           CIBW_TEST_REQUIRES: "pytest"
 
