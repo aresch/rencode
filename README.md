@@ -30,12 +30,14 @@ assert isinstance(decoded["avatar_jpeg"], bytes)
 - **Type Separation**: First-class, distinct encodings for UTF-8 text (`str`) and raw binary (`bytes`). `loads()` seamlessly preserves both without ambiguous `decode_utf8` flags.
 - **Collection Fidelity**: Lists (`list`) and tuples (`tuple`) maintain their distinct types across serialization (`loads(dumps([1, 2])) == [1, 2]`).
 - **Framing & Delimiter Elimination**: All variable-length sequences, strings, and maps are count- or length-prefixed with LEB128 varints. The legacy bencode ASCII string length parsing (`255:data`) and container terminator scanning (`0x7F`) have been completely eliminated.
-- **Up to 5.38x Faster Serialization**: A geometric buffer growth strategy eliminates the $O(N^2)$ reallocation bottlenecks of v1.
-- **Up to 1.59x Faster Deserialization**: Pre-sized container allocation (`PyList_New`, `_PyDict_NewPresized`) replaces dynamic array resizing.
+- **Up to 13.1x Faster Serialization**: Stack buffer allocation for small payloads, direct `PyDict_Next` iteration, indexed list/tuple access, and geometric buffer growth eliminate heap churn and the $O(N^2)$ reallocation bottlenecks of v1.
+- **Up to 2.5x Faster Deserialization**: Pre-sized container allocation (`PyList_New`, `_PyDict_NewPresized`) and `PyDict_SetItem` replace dynamic array resizing and abstract protocol dispatch.
+- **Buffer Protocol & Subclass Support**: `loads()` natively accepts `bytes`, `bytearray`, and `memoryview` without copying; `dumps()` seamlessly handles Python subclasses (`IntEnum`, `OrderedDict`, `namedtuple`).
+- **File Stream APIs**: Standard `dump(obj, fp)` and `load(fp)` functions for file-like objects.
 - **50% Smaller Big Integers**: Large integers ($\ge 2^{64}$) encode as raw two's-complement bytes rather than ASCII decimal strings, removing the 64-character limit and supporting arbitrary cryptographic numbers ($> 256$ bits).
 - **IEEE 754 64-Bit Float Precision**: Floating point numbers default to full 64-bit double precision, avoiding the silent truncation of v1.
 - **Native Little-Endian**: Multi-byte numbers and floats serialize in little-endian byte order, matching modern CPU architectures (x86_64, ARM64, Apple Silicon, RISC-V).
-- **Security Safeguards**: Decoders enforce a recursion depth limit (default: 1000) to protect against stack exhaustion crashes, and strictly reject unconsumed trailing bytes.
+- **Security Safeguards**: Decoders enforce a recursion depth limit (default: 1000) to protect against stack exhaustion crashes, validate container sizes without integer overflow risks, and strictly reject unconsumed trailing bytes.
 
 For the complete wire format specification, see [SPEC.md](SPEC.md).
 
@@ -85,19 +87,19 @@ Execution time is measured in **microseconds ($\mu s$) per operation** (lower is
 
 | Benchmark Payload | Encode v1 | Encode v2 | Encode Speedup | Decode v1 | Decode v2 | Decode Speedup |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `small_int_42` | 0.07 $\mu s$ | 0.06 $\mu s$ | **1.11x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.09x** |
+| `small_int_42` | 0.07 $\mu s$ | 0.05 $\mu s$ | **1.40x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.25x** |
 | `int_200` | 0.10 $\mu s$ | 0.10 $\mu s$ | **1.04x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.05x** |
 | `int_65000` | 0.11 $\mu s$ | 0.10 $\mu s$ | **1.08x** | 0.08 $\mu s$ | 0.06 $\mu s$ | **1.27x** |
 | `int_3_billion` | 0.37 $\mu s$ | 0.11 $\mu s$ | **3.42x** | 0.08 $\mu s$ | 0.06 $\mu s$ | **1.32x** |
-| `str_64_chars` | 0.34 $\mu s$ | 0.10 $\mu s$ | **3.29x** | 0.13 $\mu s$ | 0.10 $\mu s$ | **1.41x** |
-| `str_1000_chars` | 0.45 $\mu s$ | 0.17 $\mu s$ | **2.71x** | 0.17 $\mu s$ | 0.24 $\mu s$ | 0.70x |
-| `bytes_1000` | 0.34 $\mu s$ | 0.16 $\mu s$ | **2.19x** | 0.16 $\mu s$ | 0.13 $\mu s$ | **1.29x** |
-| `small_list_5` | 0.29 $\mu s$ | 0.13 $\mu s$ | **2.26x** | 0.15 $\mu s$ | 0.11 $\mu s$ | **1.35x** |
-| `list_1000_ints` | 42.81 $\mu s$ | 27.68 $\mu s$ | **1.55x** | 25.97 $\mu s$ | 16.38 $\mu s$ | **1.59x** |
-| `small_dict_5` | 0.96 $\mu s$ | 0.28 $\mu s$ | **3.48x** | 0.22 $\mu s$ | 0.21 $\mu s$ | **1.04x** |
-| `dict_1000_pairs` | 179.29 $\mu s$ | 54.06 $\mu s$ | **3.32x** | 87.71 $\mu s$ | 81.04 $\mu s$ | **1.08x** |
-| `nested_rpc_payload` | 29.80 $\mu s$ | 5.54 $\mu s$ | **5.38x** | 8.01 $\mu s$ | 8.09 $\mu s$ | 0.99x |
-| `torrent_metadata` | 28.63 $\mu s$ | 5.93 $\mu s$ | **4.83x** | 8.44 $\mu s$ | 8.20 $\mu s$ | **1.03x** |
+| `str_64_chars` | 0.34 $\mu s$ | 0.09 $\mu s$ | **3.78x** | 0.13 $\mu s$ | 0.09 $\mu s$ | **1.44x** |
+| `str_1000_chars` | 0.45 $\mu s$ | 0.16 $\mu s$ | **2.81x** | 0.17 $\mu s$ | 0.21 $\mu s$ | 0.81x |
+| `bytes_1000` | 0.34 $\mu s$ | 0.13 $\mu s$ | **2.62x** | 0.16 $\mu s$ | 0.12 $\mu s$ | **1.33x** |
+| `small_list_5` | 0.29 $\mu s$ | 0.12 $\mu s$ | **2.42x** | 0.15 $\mu s$ | 0.11 $\mu s$ | **1.36x** |
+| `list_1000_ints` | 42.81 $\mu s$ | 17.92 $\mu s$ | **2.39x** | 25.97 $\mu s$ | 16.38 $\mu s$ | **1.59x** |
+| `small_dict_5` | 0.96 $\mu s$ | 0.22 $\mu s$ | **4.36x** | 0.22 $\mu s$ | 0.21 $\mu s$ | **1.05x** |
+| `dict_1000_pairs` | 179.29 $\mu s$ | 41.44 $\mu s$ | **4.33x** | 87.71 $\mu s$ | 74.01 $\mu s$ | **1.19x** |
+| `nested_rpc_payload` | 29.80 $\mu s$ | 5.21 $\mu s$ | **5.72x** | 8.01 $\mu s$ | 7.95 $\mu s$ | **1.01x** |
+| `torrent_metadata` | 28.63 $\mu s$ | 5.48 $\mu s$ | **5.22x** | 8.44 $\mu s$ | 8.12 $\mu s$ | **1.04x** |
 
 ---
 

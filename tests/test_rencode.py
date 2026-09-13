@@ -22,8 +22,11 @@
 #     Boston, MA 02110-1301, USA.
 #
 
+import collections
+import io
 import struct
 import unittest
+from enum import IntEnum
 
 import rencode
 
@@ -410,6 +413,111 @@ class TestRencodeV2(unittest.TestCase):
         nested_payload = b"\xa1" * depth + b"\x00"
         with self.assertRaises(ValueError):
             rencode.loads(nested_payload)
+
+    def test_encode_recursion_depth_limit(self):
+        # Test circular references
+        a = []
+        a.append(a)
+        with self.assertRaises(ValueError):
+            rencode.dumps(a)
+
+        # Test deeply nested list
+        nested = 0
+        for _ in range(1500):
+            nested = [nested]
+        with self.assertRaises(ValueError):
+            rencode.dumps(nested)
+
+    def test_configurable_max_depth(self):
+        # Low max_depth
+        payload = [1, [2, [3, 4]]]
+        with self.assertRaises(ValueError):
+            rencode.dumps(payload, max_depth=2)
+
+        enc = rencode.dumps(payload)
+        with self.assertRaises(ValueError):
+            rencode.loads(enc, max_depth=2)
+
+        # High max_depth
+        depth = 1200
+        nested = 0
+        for _ in range(depth):
+            nested = [nested]
+        enc_deep = rencode.dumps(nested, max_depth=2000)
+        dec_deep = rencode.loads(enc_deep, max_depth=2000)
+        self.assertIsInstance(dec_deep, list)
+
+    def test_loads_buffer_protocol(self):
+        data = {"key": "value", "list": [1, 2, 3], "bytes": b"bin"}
+        enc = rencode.dumps(data)
+
+        # bytearray
+        ba = bytearray(enc)
+        self.assertEqual(rencode.loads(ba), data)
+
+        # memoryview
+        mv = memoryview(enc)
+        self.assertEqual(rencode.loads(mv), data)
+
+        # sliced memoryview
+        padded = b"PRE" + enc + b"POST"
+        mv_slice = memoryview(padded)[3 : 3 + len(enc)]
+        self.assertEqual(rencode.loads(mv_slice), data)
+
+    def test_subclasses_serialization(self):
+        class Status(IntEnum):
+            ACTIVE = 1
+            PENDING = 2
+
+        Point = collections.namedtuple("Point", ["x", "y"])
+
+        od = collections.OrderedDict([("b", 2), ("a", 1)])
+        enc_od = rencode.dumps(od)
+        dec_od = rencode.loads(enc_od)
+        self.assertEqual(dec_od, {"b": 2, "a": 1})
+
+        enc_enum = rencode.dumps(Status.ACTIVE)
+        self.assertEqual(rencode.loads(enc_enum), 1)
+
+        enc_nt = rencode.dumps(Point(10, 20))
+        self.assertEqual(rencode.loads(enc_nt), (10, 20))
+
+    def test_overflow_and_bounds_validation(self):
+        # Dict count overflowing size_t when multiplied by 2
+        # LEB128 for 2**63 + 1: 0x81 0x80 ... 0x01
+        large_leb128 = leb128_encode(2**63 + 1)
+        bad_dict_payload = b"\xfc" + large_leb128 + b"\x00\x00"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_dict_payload)
+
+        # List count exceeding remaining buffer size
+        bad_list_payload = b"\xfb" + leb128_encode(1000) + b"\x00\x01"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_list_payload)
+
+        # BigInt length exceeding remaining buffer size
+        bad_bigint_payload = b"\xfe" + leb128_encode(1000) + b"\x00"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_bigint_payload)
+
+    def test_leb128_overflow_protection(self):
+        # 10-byte LEB128 with bits in byte 10 exceeding 1 bit (0x02 has bit 1 set)
+        overflow_leb = b"\xf9" + (b"\x80" * 9) + b"\x02"
+        with self.assertRaises(ValueError):
+            rencode.loads(overflow_leb)
+
+        # 11-byte LEB128 (continuation bit set on 10th byte)
+        overflow_leb_11 = b"\xf9" + (b"\x80" * 10) + b"\x01"
+        with self.assertRaises(ValueError):
+            rencode.loads(overflow_leb_11)
+
+    def test_dump_and_load_streams(self):
+        data = {"score": 99.5, "tags": ["fast", "compact"]}
+        bio = io.BytesIO()
+        rencode.dump(data, bio)
+        bio.seek(0)
+        loaded = rencode.load(bio)
+        self.assertEqual(loaded, data)
 
 
 if __name__ == "__main__":

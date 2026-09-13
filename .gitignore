@@ -112,3 +112,12 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Benchmark & profiling outputs
+*.whl
+*.lprof
+*.json
+timetest_output
+orig_baseline
+tests/orig_baseline
+tests/profile_test.py

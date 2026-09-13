@@ -243,14 +243,6 @@ def load_results(filename):
         return json.load(f)
 
 
-# Pre-encode the test data for decode tests
-nested_data_str = rencode.dumps(nested_data)
-large_mixed_data_str = rencode.dumps(large_mixed_data)
-complex_dict_data_str = rencode.dumps(complex_dict_data)
-large_string_data_str = rencode.dumps(large_string_data)
-mixed_numeric_data_str = rencode.dumps(mixed_numeric_data)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run rencode performance tests")
     parser.add_argument("--save", help="Save results to specified file")
