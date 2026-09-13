@@ -11,7 +11,7 @@ Welcome! This document outlines development guidelines, architectural decisions,
 - **Install & Sync Environment**: `uv sync --all-groups` (compiles the Cython extension in editable mode and installs dev tools into `.venv`)
 - **Run Tests**: `uv run pytest`
 - **Build Distributions**: `uv build`
-- **Lint / Format**: `uv run black rencode tests`
+- **Lint / Format**: `uv run ruff check rencode tests` and `uv run ruff format rencode tests`
 
 ---
 
@@ -35,12 +35,14 @@ Welcome! This document outlines development guidelines, architectural decisions,
 
 ## Architecture & Codebase Details
 
-- `rencode/_rencode.pyx`: The Cython-optimized implementation of the rencode serialization algorithm.
-- `rencode/rencode_orig.py`: Pure-Python fallback implementation.
-- `rencode/__init__.py`: Attempts to load the compiled `_rencode` extension, falling back to `rencode_orig` if compiled binaries are unavailable.
+- `rencode/_rencode.pyx`: The Cython implementation of the rencode v2 serialization algorithm.
+- `rencode/__init__.py`: Public API exporting `dumps` and `loads`.
 - **Wire Format & Serialization Behavior**:
-  - `loads()` returns strings as `bytes` unless `decode_utf8=True` is provided.
-  - Lists in Python serialize to sequence structures that decode as tuples.
+  - Distinct encoding for UTF-8 `str` and raw `bytes`.
+  - Distinct encoding for `list` and `tuple`.
+  - Floating point numbers default to 64-bit IEEE 754.
+  - Multi-byte integers and floats use little-endian byte order.
+  - Variable-length sequences and strings use count/length prefixes (LEB128 varint).
   - Full wire format specification is documented in `SPEC.md`.
 
 ---

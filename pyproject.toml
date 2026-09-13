@@ -1,7 +1,7 @@
 [project]
 name = "rencode"
-version = "1.0.9"
-description = "rencode is an object serialization library similar to bencode from the Bittorrent project."
+version = "2.0.0"
+description = "rencode is a fast, compact binary object serialization library."
 readme = "README.md"
 license = "GPL-3.0-only"
 requires-python = ">=3.9"
@@ -34,7 +34,7 @@ Issues = "https://github.com/aresch/rencode/issues"
 dev = [
     "cython>=3.0.0",
     "pytest>=8.0.0",
-    "black>=24.0.0",
+    "ruff>=0.8.0",
     "line-profiler>=4.2.0",
 ]
 
@@ -42,7 +42,7 @@ dev = [
 dev = [
     "cython>=3.0.0",
     "pytest>=8.0.0",
-    "black>=24.0.0",
+    "ruff>=0.8.0",
     "line-profiler>=4.2.0",
 ]
 
@@ -59,4 +59,12 @@ rencode = ["*.c", "*.pyx"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
 

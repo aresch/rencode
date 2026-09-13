@@ -23,18 +23,16 @@
 #     Boston, MA  02110-1301, USA.
 #
 
-from rencode import _rencode as rencode
-from rencode import rencode_orig
-import sys
-import json
-import os
-from datetime import datetime
-import platform
-import timeit
 import argparse
-import functools
+import json
+import platform
+import sys
+import timeit
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from datetime import datetime
+from typing import Any, Callable, Dict, List
+
+from rencode import _rencode as rencode
 
 
 @dataclass
@@ -156,16 +154,13 @@ LARGE_TESTS = [
 ]
 
 
-def create_test_functions(test_case: TestCase, use_orig: bool) -> Dict[str, Callable]:
+def create_test_functions(test_case: TestCase) -> Dict[str, Callable]:
     """Create encode and decode test functions for the given test case."""
     test_functions = {}
 
     # Create encode test
     def encode_test():
-        if use_orig:
-            rencode_orig.dumps(test_case.data)
-        else:
-            rencode.dumps(test_case.data)
+        rencode.dumps(test_case.data)
 
     encode_test.is_large_test = test_case.scale_factor != 1.0
     encode_test.scale_factor = test_case.scale_factor
@@ -173,18 +168,11 @@ def create_test_functions(test_case: TestCase, use_orig: bool) -> Dict[str, Call
     test_functions["encode"] = encode_test
 
     # Pre-encode the data for decode test
-    encoded_data = (
-        rencode_orig.dumps(test_case.data)
-        if use_orig
-        else rencode.dumps(test_case.data)
-    )
+    encoded_data = rencode.dumps(test_case.data)
 
     # Create decode test
     def decode_test():
-        if use_orig:
-            rencode_orig.loads(encoded_data)
-        else:
-            rencode.loads(encoded_data)
+        rencode.loads(encoded_data)
 
     decode_test.is_large_test = test_case.scale_factor != 1.0
     decode_test.scale_factor = test_case.scale_factor
@@ -194,19 +182,19 @@ def create_test_functions(test_case: TestCase, use_orig: bool) -> Dict[str, Call
     return test_functions
 
 
-def get_test_functions(use_orig: bool) -> Dict[str, List[Callable]]:
+def get_test_functions() -> Dict[str, List[Callable]]:
     """Get all test functions organized by category."""
     test_functions = {"encode": [], "decode": []}
 
     # Add small tests
     for test_case in SMALL_TESTS:
-        funcs = create_test_functions(test_case, use_orig)
+        funcs = create_test_functions(test_case)
         test_functions["encode"].append(funcs["encode"])
         test_functions["decode"].append(funcs["decode"])
 
     # Add large tests
     for test_case in LARGE_TESTS:
-        funcs = create_test_functions(test_case, use_orig)
+        funcs = create_test_functions(test_case)
         test_functions["encode"].append(funcs["encode"])
         test_functions["decode"].append(funcs["decode"])
 
@@ -214,31 +202,25 @@ def get_test_functions(use_orig: bool) -> Dict[str, List[Callable]]:
 
 
 def get_version_info():
-    """Get version information for both implementations."""
+    """Get version information."""
     try:
         cython_version = rencode.__version__
     except AttributeError:
         cython_version = "unknown"
-
-    try:
-        python_version = rencode_orig.__version__
-    except AttributeError:
-        python_version = "unknown"
 
     def convert_version(version):
         return ".".join(map(str, version[1:]))
 
     return {
         "cython": convert_version(cython_version),
-        "python": convert_version(python_version),
     }
 
 
-def save_results(results, filename, use_orig, iterations):
+def save_results(results, filename, iterations):
     """Save test results to a JSON file."""
     data = {
         "timestamp": datetime.now().isoformat(),
-        "implementation": "python" if use_orig else "cython",
+        "implementation": "cython",
         "versions": get_version_info(),
         "platform": {
             "system": platform.system(),
@@ -262,11 +244,11 @@ def load_results(filename):
 
 
 # Pre-encode the test data for decode tests
-nested_data_str = rencode_orig.dumps(nested_data)
-large_mixed_data_str = rencode_orig.dumps(large_mixed_data)
-complex_dict_data_str = rencode_orig.dumps(complex_dict_data)
-large_string_data_str = rencode_orig.dumps(large_string_data)
-mixed_numeric_data_str = rencode_orig.dumps(mixed_numeric_data)
+nested_data_str = rencode.dumps(nested_data)
+large_mixed_data_str = rencode.dumps(large_mixed_data)
+complex_dict_data_str = rencode.dumps(complex_dict_data)
+large_string_data_str = rencode.dumps(large_string_data)
+mixed_numeric_data_str = rencode.dumps(mixed_numeric_data)
 
 
 if __name__ == "__main__":
@@ -275,9 +257,6 @@ if __name__ == "__main__":
     parser.add_argument("--compare", help="Compare against results from specified file")
     parser.add_argument(
         "--iterations", type=int, default=1000000, help="Number of iterations per test"
-    )
-    parser.add_argument(
-        "--use-orig", action="store_true", help="Use rencode_orig instead of rencode"
     )
     parser.add_argument("tests", nargs="*", help="Specific tests to run (default: all)")
     args = parser.parse_args()
@@ -293,7 +272,7 @@ if __name__ == "__main__":
 
             # If iterations differ, adjust current run
             if old_iterations != iterations:
-                print(f"\nWarning: Iteration count mismatch!")
+                print("\nWarning: Iteration count mismatch!")
                 print(f"Current: {iterations} iterations")
                 print(f"Previous: {old_iterations} iterations")
                 print("Adjusting current run to match previous iterations...")
@@ -325,7 +304,7 @@ if __name__ == "__main__":
     total_time = 0.0
 
     # Get test functions
-    test_functions = get_test_functions(args.use_orig)
+    test_functions = get_test_functions()
 
     # Filter tests if specific tests are requested
     if args.tests:
@@ -360,7 +339,7 @@ if __name__ == "__main__":
     print("")
 
     if args.save:
-        save_results(results, args.save, args.use_orig, iterations)
+        save_results(results, args.save, iterations)
         print(f"Results saved to {args.save}")
 
     if args.compare and old_results:
@@ -370,7 +349,7 @@ if __name__ == "__main__":
         # Print version information
         print("\nVersion Information:")
         print("-" * 40)
-        current_impl = "python" if args.use_orig else "cython"
+        current_impl = "cython"
         current_versions = get_version_info()
         old_impl = old_results.get("implementation", "unknown")
         old_versions = old_results.get("versions", {})

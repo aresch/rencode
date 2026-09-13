@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # test_rencode.py
 #
@@ -17,395 +16,400 @@
 # See the GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with rencode.    If not, write to:
+# along with rencode. If not, write to:
 #     The Free Software Foundation, Inc.,
 #     51 Franklin Street, Fifth Floor
-#     Boston, MA  02110-1301, USA.
+#     Boston, MA 02110-1301, USA.
 #
 
-import sys
-
+import struct
 import unittest
-from rencode import _rencode as rencode
-from rencode import rencode_orig
+
+import rencode
 
 
-class TestRencode(unittest.TestCase):
+def leb128_encode(val: int) -> bytes:
+    res = bytearray()
+    while True:
+        b = val & 0x7F
+        val >>= 7
+        if val != 0:
+            res.append(b | 0x80)
+        else:
+            res.append(b)
+            break
+    return bytes(res)
+
+
+class TestRencodeV2(unittest.TestCase):
+    # ----------------------------------------------------------------------
+    # Version & Basics
+    # ----------------------------------------------------------------------
+    def test_version(self):
+        self.assertTrue(hasattr(rencode, "__version__"))
+        self.assertEqual(rencode.__version__[0], "Cython")
+        self.assertEqual(rencode.__version__[1], 2)
+
+    # ----------------------------------------------------------------------
+    # Fixed Positive Integers (0 to 63 -> 0x00 to 0x3F)
+    # ----------------------------------------------------------------------
     def test_encode_fixed_pos_int(self):
-        self.assertEqual(rencode.dumps(1), b'\x01')
-        self.assertEqual(rencode.dumps(40), b'\x28')
-
-    def test_encode_fixed_neg_int(self):
-        self.assertEqual(rencode.dumps(-10), b'O')
-        self.assertEqual(rencode.dumps(-29), b'b')
-
-    def test_encode_int_char_size(self):
-        self.assertEqual(rencode.dumps(100), b'\x3e\x64')
-        self.assertEqual(rencode.dumps(-100), b'>\x9c')
-
-    def test_encode_int_short_size(self):
-        self.assertEqual(rencode.dumps(27123), b'\x3f\x69\xf3')
-        self.assertEqual(rencode.dumps(-27123), b'?\x96\r')
-
-    def test_encode_int_int_size(self):
-        self.assertEqual(rencode.dumps(7483648), b'@\x00r1\x00')
-        self.assertEqual(rencode.dumps(-7483648), b'@\xff\x8d\xcf\x00')
-
-    def test_encode_int_long_long_size(self):
-        self.assertEqual(
-            rencode.dumps(8223372036854775808), b'Ar\x1fILX\x9c\x00\x00'
-        )
-        self.assertEqual(
-            rencode.dumps(-8223372036854775808),
-            b'A\x8d\xe0\xb6\xb3\xa7d\x00\x00',
-        )
-
-    def test_encode_int_big_number(self):
-        n = int("9" * 62)
-        self.assertEqual(rencode.dumps(n), b'=' + str(n).encode() + b'\x7f')
-        self.assertRaises(ValueError, rencode.dumps, int("9" * 65))
-
-    def test_encode_float_32bit(self):
-        self.assertEqual(rencode.dumps(1234.56), b'BD\x9aQ\xec')
-
-    def test_encode_float_64bit(self):
-        self.assertEqual(rencode.dumps(1234.56, 64), b',@\x93J=p\xa3\xd7\n')
-
-    def test_encode_float_invalid_size(self):
-        self.assertRaises(ValueError, rencode.dumps, 1234.56, 36)
-
-    def test_encode_fixed_str(self):
-        self.assertEqual(rencode.dumps(b"foobarbaz"), b'\x89foobarbaz')
-
-    def test_encode_bytes(self):
-        self.assertEqual(rencode.dumps(b"f" * 255), b'255:' + b'f' * 255)
-        self.assertEqual(rencode.dumps(b"\0"), b'\x81\x00')
-
-    def test_encode_str(self):
-        self.assertEqual(rencode.dumps("fööbar"), b'\x88' + "fööbar".encode('utf-8'))
-
-    def test_encode_none(self):
-        self.assertEqual(rencode.dumps(None), b'E')
-
-    def test_encode_bool(self):
-        self.assertEqual(rencode.dumps(True), b'C')
-        self.assertEqual(rencode.dumps(False), b'D')
-
-    def test_encode_fixed_list(self):
-        l = [100, -234.01, b"foobar", "bäz"] * 4
-        self.assertEqual(rencode.dumps(l), b'\xd0' + b''.join([
-            b'\x3e\x64',  # 100
-            b'B\xc3j\x02\x8f',  # -234.01
-            b'\x86foobar',  # "foobar"
-            b'\x84' + "bäz".encode('utf-8')  # "bäz"
-        ]) * 4)
-
-    def test_encode_list(self):
-        l = [100, -234.01, b"foobar", "bäz"] * 80
-        self.assertEqual(rencode.dumps(l), b';' + b''.join([
-            b'\x3e\x64',  # 100
-            b'B\xc3j\x02\x8f',  # -234.01
-            b'\x86foobar',  # "foobar"
-            b'\x84' + "bäz".encode('utf-8')  # "bäz"
-        ]) * 80 + b'\x7f')
-
-    def test_encode_fixed_dict(self):
-        s = b"abcdefghijk"
-        d = dict(zip(s, [1234] * len(s)))
-        self.assertEqual(rencode.dumps(d), b'q' + b''.join(
-            b'>' + bytes([i]) + b'?\x04\xd2' for i in range(ord('a'), ord('k') + 1)
-        ))
-
-    def test_encode_dict(self):
-        s = b"abcdefghijklmnopqrstuvwxyz1234567890"
-        d = dict(zip(s, [1234] * len(s)))
-        self.assertEqual(rencode.dumps(d), b'<' + b''.join(
-            b'>' + bytes([i]) + b'?\x04\xd2' for i in range(ord('a'), ord('z') + 1)
-        ) + b''.join(
-            b'>' + bytes([i]) + b'?\x04\xd2' for i in range(ord('1'), ord('9') + 1)
-        ) + b'>0?\x04\xd2' + b'\x7f')
+        self.assertEqual(rencode.dumps(0), b"\x00")
+        self.assertEqual(rencode.dumps(1), b"\x01")
+        self.assertEqual(rencode.dumps(40), b"\x28")
+        self.assertEqual(rencode.dumps(63), b"\x3f")
 
     def test_decode_fixed_pos_int(self):
-        self.assertEqual(rencode.loads(rencode.dumps(10)), 10)
+        for i in (0, 1, 10, 42, 63):
+            self.assertEqual(rencode.loads(rencode.dumps(i)), i)
+
+    # ----------------------------------------------------------------------
+    # Fixed Negative Integers (-1 to -32 -> 0x40 to 0x5F)
+    # ----------------------------------------------------------------------
+    def test_encode_fixed_neg_int(self):
+        self.assertEqual(rencode.dumps(-1), b"\x40")
+        self.assertEqual(rencode.dumps(-10), b"\x49")
+        self.assertEqual(rencode.dumps(-32), b"\x5f")
 
     def test_decode_fixed_neg_int(self):
-        self.assertEqual(rencode.loads(rencode.dumps(-10)), -10)
+        for i in (-1, -5, -10, -20, -32):
+            self.assertEqual(rencode.loads(rencode.dumps(i)), i)
 
-    def test_decode_char(self):
-        self.assertEqual(rencode.loads(rencode.dumps(100)), 100)
-        self.assertEqual(rencode.loads(rencode.dumps(-100)), -100)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([62])))
+    # ----------------------------------------------------------------------
+    # Variable-Length Integers (int8, int16, int32, int64, BigInt)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_int8(self):
+        # -128 to -33 and 64 to 127
+        self.assertEqual(rencode.dumps(64), b"\xf3\x40")
+        self.assertEqual(rencode.dumps(100), b"\xf3\x64")
+        self.assertEqual(rencode.dumps(-33), b"\xf3\xdf")
+        self.assertEqual(rencode.dumps(-128), b"\xf3\x80")
+        for i in (-128, -100, -33, 64, 100, 127):
+            self.assertEqual(rencode.loads(rencode.dumps(i)), i)
 
-    def test_decode_short(self):
-        self.assertEqual(rencode.loads(rencode.dumps(27123)), 27123)
-        self.assertEqual(rencode.loads(rencode.dumps(-27123)), -27123)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([63])))
+    def test_encode_decode_int16(self):
+        # 16-bit signed, little-endian: 0xF4 + 2 bytes
+        self.assertEqual(rencode.dumps(1000), b"\xf4\xe8\x03")
+        self.assertEqual(rencode.dumps(-1000), b"\xf4\x18\xfc")
+        self.assertEqual(rencode.dumps(27123), b"\xf4" + struct.pack("<h", 27123))
+        self.assertEqual(rencode.dumps(-27123), b"\xf4" + struct.pack("<h", -27123))
+        for i in (-32768, -27123, -129, 128, 1000, 27123, 32767):
+            self.assertEqual(rencode.loads(rencode.dumps(i)), i)
 
-    def test_decode_int(self):
-        self.assertEqual(rencode.loads(rencode.dumps(7483648)), 7483648)
-        self.assertEqual(rencode.loads(rencode.dumps(-7483648)), -7483648)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([64])))
+    def test_encode_decode_int32(self):
+        # 32-bit signed, little-endian: 0xF5 + 4 bytes
+        self.assertEqual(rencode.dumps(1000000), b"\xf5\x40\x42\x0f\x00")
+        self.assertEqual(rencode.dumps(-1000000), b"\xf5\xc0\xbd\xf0\xff")
+        self.assertEqual(rencode.dumps(7483648), b"\xf5" + struct.pack("<i", 7483648))
+        self.assertEqual(rencode.dumps(-7483648), b"\xf5" + struct.pack("<i", -7483648))
+        for i in (-2147483648, -7483648, -32769, 32768, 7483648, 2147483647):
+            self.assertEqual(rencode.loads(rencode.dumps(i)), i)
 
-    def test_decode_long_long(self):
+    def test_encode_decode_int64(self):
+        # 64-bit signed, little-endian: 0xF6 + 8 bytes
+        big = 8223372036854775808
+        self.assertEqual(rencode.dumps(big), b"\xf6" + struct.pack("<q", big))
+        self.assertEqual(rencode.dumps(-big), b"\xf6" + struct.pack("<q", -big))
+        for i in (
+            -9223372036854775808,
+            -8223372036854775808,
+            -2147483649,
+            2147483648,
+            8223372036854775808,
+            9223372036854775807,
+        ):
+            self.assertEqual(rencode.loads(rencode.dumps(i)), i)
+
+    def test_encode_decode_bigint(self):
+        # Arbitrary precision integers exceeding 64 bits: 0xFE + varint len + two's complement bytes
+        big_pos = 2**64
+        big_neg = -(2**64)
+        crypto_int = 2**256 - 1
+        crypto_int_neg = -(2**256)
+
+        enc = rencode.dumps(big_pos)
+        self.assertEqual(enc[0], 0xFE)
+        self.assertEqual(rencode.loads(enc), big_pos)
+        self.assertEqual(rencode.loads(rencode.dumps(big_neg)), big_neg)
+        self.assertEqual(rencode.loads(rencode.dumps(crypto_int)), crypto_int)
+        self.assertEqual(rencode.loads(rencode.dumps(crypto_int_neg)), crypto_int_neg)
+
+        # Ensure massive integers (>64 characters) serialize without overflow
+        huge = 10**100
+        self.assertEqual(rencode.loads(rencode.dumps(huge)), huge)
+
+    # ----------------------------------------------------------------------
+    # Floating Point Numbers (float64 default, float32 optional)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_float64(self):
+        # Default Python float: 0xF8 + 8 bytes little-endian double
+        v = 1.1
+        enc = rencode.dumps(v)
+        self.assertEqual(enc[0], 0xF8)
+        self.assertEqual(enc[1:], struct.pack("<d", v))
+        # Exact round-trip fidelity
+        self.assertEqual(rencode.loads(enc), v)
+
+        for f in (0.0, -0.0, 1234.56789, -9876.54321, 1e20, -1e-20):
+            self.assertEqual(rencode.loads(rencode.dumps(f)), f)
+
+    def test_encode_decode_float32(self):
+        # Explicit 32-bit float: 0xF7 + 4 bytes little-endian single
+        v = 1234.5
+        enc = rencode.dumps(v, float_bits=32)
+        self.assertEqual(enc[0], 0xF7)
+        self.assertEqual(enc[1:], struct.pack("<f", v))
+        self.assertAlmostEqual(rencode.loads(enc), v, places=4)
+
+    def test_encode_float_invalid_size(self):
+        with self.assertRaises(ValueError):
+            rencode.dumps(1234.56, float_bits=36)
+
+    # ----------------------------------------------------------------------
+    # Constants: None and Booleans
+    # ----------------------------------------------------------------------
+    def test_encode_decode_constants(self):
+        self.assertEqual(rencode.dumps(None), b"\xf0")
+        self.assertEqual(rencode.loads(b"\xf0"), None)
+        self.assertIsNone(rencode.loads(rencode.dumps(None)))
+
+        self.assertEqual(rencode.dumps(False), b"\xf1")
+        self.assertEqual(rencode.loads(b"\xf1"), False)
+        self.assertIs(rencode.loads(rencode.dumps(False)), False)
+
+        self.assertEqual(rencode.dumps(True), b"\xf2")
+        self.assertEqual(rencode.loads(b"\xf2"), True)
+        self.assertIs(rencode.loads(rencode.dumps(True)), True)
+
+    # ----------------------------------------------------------------------
+    # Strings (str / UTF-8)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_fixed_str(self):
+        # Length 0 to 31 -> 0x60 + length
+        self.assertEqual(rencode.dumps(""), b"\x60")
+        self.assertEqual(rencode.dumps("a"), b"\x61a")
+        self.assertEqual(rencode.dumps("hello"), b"\x65hello")
+        s31 = "x" * 31
+        self.assertEqual(rencode.dumps(s31), b"\x7f" + s31.encode("utf-8"))
+
+        res = rencode.loads(rencode.dumps("hello"))
+        self.assertEqual(res, "hello")
+        self.assertIsInstance(res, str)
+
+        # Multi-byte UTF-8
+        unicode_str = "fööbar"
+        utf8_bytes = unicode_str.encode("utf-8")
         self.assertEqual(
-            rencode.loads(rencode.dumps(8223372036854775808)), 8223372036854775808
+            rencode.dumps(unicode_str), bytes([0x60 + len(utf8_bytes)]) + utf8_bytes
         )
-        self.assertEqual(
-            rencode.loads(rencode.dumps(-8223372036854775808)), -8223372036854775808
-        )
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([65])))
+        self.assertEqual(rencode.loads(rencode.dumps(unicode_str)), unicode_str)
 
-    def test_decode_int_big_number(self):
-        n = int(b"9" * 62)
-        toobig = "={x}\x7f".format(x="9" * 65).encode()
-        self.assertEqual(rencode.loads(rencode.dumps(n)), n)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([61])))
-        self.assertRaises(ValueError, rencode.loads, toobig)
+    def test_encode_decode_variable_str(self):
+        # Length >= 32 -> 0xF9 + LEB128 len + UTF-8 bytes
+        s32 = "a" * 32
+        self.assertEqual(rencode.dumps(s32), b"\xf9\x20" + s32.encode("utf-8"))
+        self.assertEqual(rencode.loads(rencode.dumps(s32)), s32)
 
-    def test_decode_float_32bit(self):
-        v = 1234.56
-        f = rencode.dumps(v)
-        decoded = rencode.loads(f)
-        self.assertLess(abs(decoded - v), 1e-4)  # Increased tolerance for 32-bit floats
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([66])))
+        s500 = "hello world! " * 40
+        utf8 = s500.encode("utf-8")
+        expected_prefix = b"\xf9" + leb128_encode(len(utf8))
+        enc = rencode.dumps(s500)
+        self.assertTrue(enc.startswith(expected_prefix))
+        self.assertEqual(rencode.loads(enc), s500)
 
-    def test_decode_float_64bit(self):
-        v = 1234.56
-        f = rencode.dumps(v, 64)
-        self.assertEqual(rencode.loads(f), v)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([44])))
+    # ----------------------------------------------------------------------
+    # Binary Data (bytes)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_fixed_bytes(self):
+        # Length 0 to 31 -> 0x80 + length
+        self.assertEqual(rencode.dumps(b""), b"\x80")
+        self.assertEqual(rencode.dumps(b"\x00"), b"\x81\x00")
+        self.assertEqual(rencode.dumps(b"hello"), b"\x85hello")
+        b31 = b"\xff" * 31
+        self.assertEqual(rencode.dumps(b31), b"\x9f" + b31)
 
-    def test_decode_fixed_bytes(self):
-        self.assertEqual(rencode.loads(rencode.dumps(b"foobarbaz")), b"foobarbaz")
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([130])))
+        res = rencode.loads(rencode.dumps(b"hello"))
+        self.assertEqual(res, b"hello")
+        self.assertIsInstance(res, bytes)
 
-    def test_decode_bytes(self):
-        self.assertEqual(rencode.loads(rencode.dumps(b"f" * 255)), b"f" * 255)
-        self.assertRaises(IndexError, rencode.loads, b"50")
+    def test_encode_decode_variable_bytes(self):
+        # Length >= 32 -> 0xFA + LEB128 len + raw bytes
+        b32 = b"\x01" * 32
+        self.assertEqual(rencode.dumps(b32), b"\xfa\x20" + b32)
+        self.assertEqual(rencode.loads(rencode.dumps(b32)), b32)
 
-    def test_decode_str(self):
-        self.assertEqual(
-            rencode.loads(rencode.dumps("fööbar")), "fööbar".encode("utf8")
-        )
+        b1000 = bytes(range(256)) * 4
+        enc = rencode.dumps(b1000)
+        expected_prefix = b"\xfa" + leb128_encode(len(b1000))
+        self.assertTrue(enc.startswith(expected_prefix))
+        self.assertEqual(rencode.loads(enc), b1000)
 
-    def test_decode_none(self):
-        self.assertEqual(rencode.loads(rencode.dumps(None)), None)
+    # ----------------------------------------------------------------------
+    # Strict Type Separation: str vs bytes
+    # ----------------------------------------------------------------------
+    def test_str_and_bytes_distinct(self):
+        payload = {
+            "text": "Unicode: 🚀",
+            "binary": b"\x80\x81\xff\xfe\x00\x01",
+        }
+        decoded = rencode.loads(rencode.dumps(payload))
+        self.assertIsInstance(decoded["text"], str)
+        self.assertEqual(decoded["text"], "Unicode: 🚀")
+        self.assertIsInstance(decoded["binary"], bytes)
+        self.assertEqual(decoded["binary"], b"\x80\x81\xff\xfe\x00\x01")
 
-    def test_decode_bool(self):
-        self.assertEqual(rencode.loads(rencode.dumps(True)), True)
-        self.assertEqual(rencode.loads(rencode.dumps(False)), False)
+    # ----------------------------------------------------------------------
+    # Lists (list)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_fixed_list(self):
+        # Count 0 to 31 -> 0xA0 + count
+        self.assertEqual(rencode.dumps([]), b"\xa0")
+        self.assertEqual(rencode.dumps([1, 2]), b"\xa2\x01\x02")
 
-    def test_decode_fixed_list(self):
-        l = [100, False, b"foobar", "bäz".encode("utf8")] * 4
-        self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([194])))
+        l31 = [1] * 31
+        self.assertEqual(rencode.dumps(l31), b"\xbf" + b"\x01" * 31)
 
-    def test_decode_list(self):
-        l = [100, False, b"foobar", "bäz".encode("utf8")] * 80
-        self.assertEqual(rencode.loads(rencode.dumps(l)), tuple(l))
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([59])))
+        res = rencode.loads(rencode.dumps([1, 2, 3]))
+        self.assertEqual(res, [1, 2, 3])
+        self.assertIsInstance(res, list)
 
-    def test_decode_fixed_dict(self):
-        s = b"abcdefghijk"
-        d = dict(zip(s, [1234] * len(s)))
-        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([104])))
+    def test_encode_decode_variable_list(self):
+        # Count >= 32 -> 0xFB + LEB128 count + elements
+        l32 = [1] * 32
+        enc = rencode.dumps(l32)
+        self.assertEqual(enc[:2], b"\xfb\x20")
+        self.assertEqual(rencode.loads(enc), l32)
 
-    def test_decode_dict(self):
-        s = b"abcdefghijklmnopqrstuvwxyz1234567890"
-        d = dict(zip(s, [b"foo" * 120] * len(s)))
-        d2 = {b"foo": d, b"bar": d, b"baz": d}
-        self.assertEqual(rencode.loads(rencode.dumps(d2)), d2)
-        self.assertRaises(IndexError, rencode.loads, bytes(bytearray([60])))
+        l100 = list(range(100))
+        res = rencode.loads(rencode.dumps(l100))
+        self.assertEqual(res, l100)
+        self.assertIsInstance(res, list)
 
-    def test_decode_str_bytes(self):
-        b = [202, 132, 100, 114, 97, 119, 1, 0, 0, 63, 1, 242, 63]
-        d = bytes(bytearray(b))
-        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
+    # ----------------------------------------------------------------------
+    # Tuples (tuple)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_fixed_tuple(self):
+        # Count 0 to 15 -> 0xE0 + count
+        self.assertEqual(rencode.dumps(()), b"\xe0")
+        self.assertEqual(rencode.dumps((1, 2)), b"\xe2\x01\x02")
 
-    def test_decode_str_nullbytes(self):
-        b = (
-            202,
-            132,
-            100,
-            114,
-            97,
-            119,
-            1,
-            0,
-            0,
-            63,
-            1,
-            242,
-            63,
-            1,
-            60,
-            132,
-            120,
-            50,
-            54,
-            52,
-            49,
-            51,
-            48,
-            58,
-            0,
-            0,
-            0,
-            1,
-            65,
-            154,
-            35,
-            215,
-            48,
-            204,
-            4,
-            35,
-            242,
-            3,
-            122,
-            218,
-            67,
-            192,
-            127,
-            40,
-            241,
-            127,
-            2,
-            86,
-            240,
-            63,
-            135,
-            177,
-            23,
-            119,
-            63,
-            31,
-            226,
-            248,
-            19,
-            13,
-            192,
-            111,
-            74,
-            126,
-            2,
-            15,
-            240,
-            31,
-            239,
-            48,
-            85,
-            238,
-            159,
-            155,
-            197,
-            241,
-            23,
-            119,
-            63,
-            2,
-            23,
-            245,
-            63,
-            24,
-            240,
-            86,
-            36,
-            176,
-            15,
-            187,
-            185,
-            248,
-            242,
-            255,
-            0,
-            126,
-            123,
-            141,
-            206,
-            60,
-            188,
-            1,
-            27,
-            254,
-            141,
-            169,
-            132,
-            93,
-            220,
-            252,
-            121,
-            184,
-            8,
-            31,
-            224,
-            63,
-            244,
-            226,
-            75,
-            224,
-            119,
-            135,
-            229,
-            248,
-            3,
-            243,
-            248,
-            220,
-            227,
-            203,
-            193,
-            3,
-            224,
-            127,
-            47,
-            134,
-            59,
-            5,
-            99,
-            249,
-            254,
-            35,
-            196,
-            127,
-            17,
-            252,
-            71,
-            136,
-            254,
-            35,
-            196,
-            112,
-            4,
-            177,
-            3,
-            63,
-            5,
-            220,
-        )
-        d = bytes(bytearray(b))
-        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
+        t15 = tuple([1] * 15)
+        self.assertEqual(rencode.dumps(t15), b"\xef" + b"\x01" * 15)
 
-    def test_decode_utf8(self):
-        s = b"foobarbaz"
-        d = rencode.loads(rencode.dumps(s), decode_utf8=True)
-        self.assertIsInstance(d, str)
-        s = rencode.dumps(b"\x56\xe4foo\xc3")
-        self.assertRaises(UnicodeDecodeError, rencode.loads, s, decode_utf8=True)
+        res = rencode.loads(rencode.dumps((1, 2, 3)))
+        self.assertEqual(res, (1, 2, 3))
+        self.assertIsInstance(res, tuple)
 
-    def test_version_exposed(self):
-        assert rencode.__version__
-        assert rencode_orig.__version__
-        self.assertEqual(
-            rencode.__version__[1:],
-            rencode_orig.__version__[1:],
-            "version number does not match",
-        )
+    def test_encode_decode_variable_tuple(self):
+        # Count >= 16 -> 0xFD + LEB128 count + elements
+        t16 = tuple([1] * 16)
+        enc = rencode.dumps(t16)
+        self.assertEqual(enc[:2], b"\xfd\x10")
+        self.assertEqual(rencode.loads(enc), t16)
 
-    def test_invalid_typecode(self):
-        s = b";\x2f\x7f"
-        self.assertRaises(ValueError, rencode.loads, s)
+        t100 = tuple(range(100))
+        res = rencode.loads(rencode.dumps(t100))
+        self.assertEqual(res, t100)
+        self.assertIsInstance(res, tuple)
+
+    def test_list_vs_tuple_fidelity(self):
+        orig_list = [1, 2, 3]
+        orig_tuple = (1, 2, 3)
+
+        dec_list = rencode.loads(rencode.dumps(orig_list))
+        dec_tuple = rencode.loads(rencode.dumps(orig_tuple))
+
+        self.assertEqual(dec_list, orig_list)
+        self.assertIsInstance(dec_list, list)
+        self.assertNotEqual(dec_list, orig_tuple)
+
+        self.assertEqual(dec_tuple, orig_tuple)
+        self.assertIsInstance(dec_tuple, tuple)
+
+    # ----------------------------------------------------------------------
+    # Dictionaries / Maps (dict)
+    # ----------------------------------------------------------------------
+    def test_encode_decode_fixed_dict(self):
+        # Count 0 to 31 -> 0xC0 + count
+        self.assertEqual(rencode.dumps({}), b"\xc0")
+
+        d1 = {"a": 1}
+        enc = rencode.dumps(d1)
+        self.assertEqual(enc, b"\xc1\x61a\x01")
+        self.assertEqual(rencode.loads(enc), d1)
+
+        d31 = {str(i): i for i in range(31)}
+        res = rencode.loads(rencode.dumps(d31))
+        self.assertEqual(res, d31)
+        self.assertIsInstance(res, dict)
+
+    def test_encode_decode_variable_dict(self):
+        # Count >= 32 -> 0xFC + LEB128 count + key/value pairs
+        d32 = {str(i): i for i in range(32)}
+        enc = rencode.dumps(d32)
+        self.assertEqual(enc[:2], b"\xfc\x20")
+        self.assertEqual(rencode.loads(enc), d32)
+
+        d100 = {f"key_{i}": i * 10 for i in range(100)}
+        res = rencode.loads(rencode.dumps(d100))
+        self.assertEqual(res, d100)
+
+    def test_dict_with_tuple_and_mixed_keys(self):
+        # Tuples as dict keys
+        d = {
+            (1, 2): "coordinates",
+            42: "answer",
+            "flag": True,
+        }
+        res = rencode.loads(rencode.dumps(d))
+        self.assertEqual(res, d)
+        self.assertEqual(res[(1, 2)], "coordinates")
+
+    # ----------------------------------------------------------------------
+    # Extensions (EXT: 0xFF)
+    # ----------------------------------------------------------------------
+    def test_ext_structure(self):
+        # Opcode 0xFF + LEB128 tag + LEB128 length + payload
+        tag = 0x85
+        payload = b"custom-payload-bytes"
+        raw = b"\xff" + leb128_encode(tag) + leb128_encode(len(payload)) + payload
+
+        # Direct loading of unhandled extension raises NotImplementedError
+        with self.assertRaises(NotImplementedError):
+            rencode.loads(raw)
+
+    # ----------------------------------------------------------------------
+    # Security, Validation & Error Handling
+    # ----------------------------------------------------------------------
+    def test_trailing_data_raises_value_error(self):
+        # Trailing garbage must be rejected
+        payload = rencode.dumps(42) + b"EXTRA_GARBAGE"
+        with self.assertRaises(ValueError):
+            rencode.loads(payload)
+
+    def test_truncated_data_raises_error(self):
+        # Incomplete buffer
+        with self.assertRaises((ValueError, IndexError)):
+            rencode.loads(b"\xf5\x00")  # int32 opcode with only 1 byte
+
+        with self.assertRaises((ValueError, IndexError)):
+            rencode.loads(b"\x65abc")  # fixed string length 5 with only 3 bytes
+
+        with self.assertRaises((ValueError, IndexError)):
+            rencode.loads(b"\xa2\x01")  # fixed list count 2 with only 1 element
+
+    def test_invalid_utf8_in_string_raises(self):
+        # Fixed string with invalid UTF-8 bytes
+        bad_utf8 = b"\x62\xff\xfe"
+        with self.assertRaises(UnicodeDecodeError):
+            rencode.loads(bad_utf8)
+
+    def test_recursion_depth_limit(self):
+        # Nesting past 1000 levels must raise ValueError, NOT crash with SIGSEGV
+        depth = 1500
+        nested_payload = b"\xa1" * depth + b"\x00"
+        with self.assertRaises(ValueError):
+            rencode.loads(nested_payload)
 
 
 if __name__ == "__main__":
