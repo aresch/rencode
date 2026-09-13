@@ -54,6 +54,9 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 include = ["rencode*"]
 
+[tool.setuptools.package-data]
+rencode = ["py.typed", "*.pyi"]
+
 [tool.setuptools.exclude-package-data]
 rencode = ["*.c", "*.pyx"]
 

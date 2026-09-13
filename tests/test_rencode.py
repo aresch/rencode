@@ -24,6 +24,7 @@
 
 import collections
 import io
+import pickle
 import struct
 import unittest
 from enum import IntEnum
@@ -400,6 +401,25 @@ class TestRencodeV2(unittest.TestCase):
         self.assertNotEqual(ext, rencode.Ext(0x98, b"\x01\x02\x03\x04"))
         self.assertNotEqual(ext, "not an ext")
 
+        # Ext pickle support
+        pickled = pickle.dumps(ext)
+        unpickled = pickle.loads(pickled)
+        self.assertEqual(unpickled, ext)
+        self.assertEqual(unpickled.tag, ext.tag)
+        self.assertEqual(unpickled.data, ext.data)
+
+    def test_ext_validation(self):
+        with self.assertRaises(TypeError):
+            rencode.Ext("not_an_int", b"abc")
+        with self.assertRaises(TypeError):
+            rencode.Ext(True, b"abc")
+        with self.assertRaises(ValueError):
+            rencode.Ext(-1, b"abc")
+        with self.assertRaises(ValueError):
+            rencode.Ext(2**64, b"abc")
+        with self.assertRaises(TypeError):
+            rencode.Ext(1, "not_bytes")
+
     def test_ext_hook(self):
         # Custom type deserialization via ext_hook
         class Point:
@@ -446,6 +466,11 @@ class TestRencodeV2(unittest.TestCase):
         ba = bytearray(b"bytearray_test")
         enc_ba = rencode.dumps(ba)
         self.assertEqual(rencode.loads(enc_ba), b"bytearray_test")
+
+        # Variable-length bytearray >= 32
+        ba_large = bytearray(b"X" * 120)
+        enc_ba_large = rencode.dumps(ba_large)
+        self.assertEqual(rencode.loads(enc_ba_large), b"X" * 120)
 
         mv = memoryview(b"memoryview_test")
         enc_mv = rencode.dumps(mv)
@@ -612,10 +637,30 @@ class TestRencodeV2(unittest.TestCase):
         with self.assertRaises(ValueError):
             rencode.loads(bad_list_payload)
 
+        # Tuple count exceeding remaining buffer size
+        bad_tuple_payload = b"\xfd" + leb128_encode(1000) + b"\x00\x01"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_tuple_payload)
+
+        # String length exceeding remaining buffer size
+        bad_str_payload = b"\xf9" + leb128_encode(1000) + b"short"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_str_payload)
+
+        # Bytes length exceeding remaining buffer size
+        bad_bin_payload = b"\xfa" + leb128_encode(1000) + b"short"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_bin_payload)
+
         # BigInt length exceeding remaining buffer size
         bad_bigint_payload = b"\xfe" + leb128_encode(1000) + b"\x00"
         with self.assertRaises(ValueError):
             rencode.loads(bad_bigint_payload)
+
+        # Extension byte length exceeding remaining buffer size
+        bad_ext_payload = b"\xff" + leb128_encode(1) + leb128_encode(1000) + b"short"
+        with self.assertRaises(ValueError):
+            rencode.loads(bad_ext_payload)
 
     def test_leb128_overflow_protection(self):
         # 10-byte LEB128 with bits in byte 10 exceeding 1 bit (0x02 has bit 1 set)

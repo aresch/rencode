@@ -3,3 +3,5 @@ include README.md
 include SPEC.md
 include tests/*.py
 include rencode/_rencode.pyx
+include rencode/py.typed
+include rencode/*.pyi

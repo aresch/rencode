@@ -25,6 +25,7 @@
 
 from cpython.ref cimport PyObject, Py_INCREF
 from cpython.bytes cimport PyBytes_FromStringAndSize, PyBytes_AS_STRING, PyBytes_GET_SIZE, PyBytes_Check
+from cpython.bytearray cimport PyByteArray_Check, PyByteArray_AS_STRING, PyByteArray_GET_SIZE
 from cpython.unicode cimport PyUnicode_DecodeUTF8, PyUnicode_AsUTF8AndSize
 from cpython.list cimport PyList_New, PyList_SET_ITEM, PyList_GET_ITEM
 from cpython.tuple cimport PyTuple_New, PyTuple_SET_ITEM, PyTuple_GET_ITEM
@@ -35,36 +36,44 @@ cdef extern from "Python.h":
     object _PyDict_NewPresized(Py_ssize_t minused)
     long long PyLong_AsLongLongAndOverflow(object pylong, int *overflow)
     void PyErr_Clear()
+    object _PyLong_FromByteArray(const unsigned char* bytes, size_t n, int little_endian, int is_signed)
+
 from libc.stdlib cimport malloc, realloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t
 
-class Ext:
+cdef class Ext:
     """
     Container for Rencode v2 Extension type (opcode 0xFF).
     """
-    __slots__ = ("tag", "data")
+    cdef public uint64_t tag
+    cdef public bytes data
 
-    def __init__(self, tag, data):
+    def __init__(self, object tag, object data):
         if not isinstance(tag, int) or isinstance(tag, bool):
             raise TypeError("Extension tag must be an integer")
         if tag < 0:
             raise ValueError("Extension tag must be non-negative")
+        if tag > 18446744073709551615:
+            raise ValueError("Extension tag exceeds 64-bit bounds")
         if not isinstance(data, (bytes, bytearray, memoryview)):
             raise TypeError("Extension data must be bytes-like")
-        self.tag = tag
+        self.tag = <uint64_t>tag
         self.data = bytes(data) if not isinstance(data, bytes) else data
 
     def __repr__(self):
         return f"Ext(tag={self.tag}, data={self.data!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, object other):
         if isinstance(other, Ext):
-            return self.tag == other.tag and self.data == other.data
+            return self.tag == (<Ext>other).tag and self.data == (<Ext>other).data
         return False
 
     def __hash__(self):
         return hash((self.tag, self.data))
+
+    def __reduce__(self):
+        return (Ext, (self.tag, self.data))
 
 
 __version__ = ("Cython", 2, 0, 0)
@@ -151,6 +160,8 @@ cdef inline int buf_init(Buffer *buf) except -1:
 cdef inline int buf_ensure(Buffer *buf, size_t need) except -1:
     cdef size_t new_cap
     cdef char *new_data
+    if need > (<size_t>-1) - buf.pos - 1024:
+        raise MemoryError("Buffer size overflow")
     if buf.pos + need > buf.capacity:
         new_cap = buf.capacity * 2
         if new_cap < buf.pos + need:
@@ -322,6 +333,20 @@ cdef inline int _encode_bytes(Buffer *buf, object data) except -1:
         buf_write_bytes(buf, PyBytes_AS_STRING(data), slen)
     return 0
 
+cdef inline int _encode_bytearray(Buffer *buf, object data) except -1:
+    cdef Py_ssize_t slen = PyByteArray_GET_SIZE(data)
+    if slen < OP_BIN_FIXED_COUNT:
+        buf_ensure(buf, 1 + slen)
+        buf.data[buf.pos] = <char>(OP_BIN_FIXED_START + <uint8_t>slen)
+        if slen > 0:
+            memcpy(&buf.data[buf.pos + 1], PyByteArray_AS_STRING(data), slen)
+        buf.pos += 1 + slen
+    else:
+        buf_write_byte(buf, OP_BIN_V)
+        buf_write_leb128(buf, <uint64_t>slen)
+        buf_write_bytes(buf, PyByteArray_AS_STRING(data), slen)
+    return 0
+
 cdef inline int _encode_buffer(Buffer *buf, object data) except -1:
     cdef Py_buffer view
     if PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) != 0:
@@ -342,30 +367,14 @@ cdef inline int _encode_buffer(Buffer *buf, object data) except -1:
         PyBuffer_Release(&view)
     return 0
 
-cdef inline int _encode_ext(Buffer *buf, object ext_obj) except -1:
-    cdef object tag_obj = ext_obj.tag
-    cdef object data_obj = ext_obj.data
-    if not isinstance(tag_obj, int) or isinstance(tag_obj, bool):
-        raise TypeError("Extension tag must be an integer")
-    if tag_obj < 0:
-        raise ValueError("Extension tag must be non-negative")
-    cdef uint64_t tag = <uint64_t>tag_obj
-    cdef Py_buffer view
-    if PyBytes_Check(data_obj):
-        buf_write_byte(buf, OP_EXT)
-        buf_write_leb128(buf, tag)
-        buf_write_leb128(buf, <uint64_t>PyBytes_GET_SIZE(data_obj))
-        buf_write_bytes(buf, PyBytes_AS_STRING(data_obj), PyBytes_GET_SIZE(data_obj))
-    elif PyObject_GetBuffer(data_obj, &view, PyBUF_SIMPLE) == 0:
-        try:
-            buf_write_byte(buf, OP_EXT)
-            buf_write_leb128(buf, tag)
-            buf_write_leb128(buf, <uint64_t>view.len)
-            buf_write_bytes(buf, view.buf, view.len)
-        finally:
-            PyBuffer_Release(&view)
-    else:
-        raise TypeError("Extension data must be bytes-like")
+cdef inline int _encode_ext(Buffer *buf, Ext ext_obj) except -1:
+    cdef uint64_t tag = ext_obj.tag
+    cdef bytes data_obj = ext_obj.data
+    cdef Py_ssize_t slen = PyBytes_GET_SIZE(data_obj)
+    buf_write_byte(buf, OP_EXT)
+    buf_write_leb128(buf, tag)
+    buf_write_leb128(buf, <uint64_t>slen)
+    buf_write_bytes(buf, PyBytes_AS_STRING(data_obj), slen)
     return 0
 
 cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max_depth, object default_fn) except -1:
@@ -394,7 +403,9 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
     elif type(data) is bytes:
         _encode_bytes(buf, data)
     elif type(data) is bytearray:
-        _encode_buffer(buf, data)
+        _encode_bytearray(buf, data)
+    elif type(data) is Ext:
+        _encode_ext(buf, <Ext>data)
     elif type(data) is list:
         count = len(data)
         if count < OP_LIST_FIXED_COUNT:
@@ -436,6 +447,8 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
         _encode_str(buf, data)
     elif isinstance(data, bytes):
         _encode_bytes(buf, data)
+    elif isinstance(data, bytearray):
+        _encode_bytearray(buf, data)
     elif isinstance(data, list):
         count = len(data)
         if count < OP_LIST_FIXED_COUNT:
@@ -465,10 +478,10 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
         while PyDict_Next(data, &dict_pos, &pk, &pv):
             encode_obj(buf, <object>pk, float_bits, depth + 1, max_depth, default_fn)
             encode_obj(buf, <object>pv, float_bits, depth + 1, max_depth, default_fn)
-    elif isinstance(data, (bytearray, memoryview)):
+    elif isinstance(data, memoryview):
         _encode_buffer(buf, data)
     elif isinstance(data, Ext):
-        _encode_ext(buf, data)
+        _encode_ext(buf, <Ext>data)
     elif default_fn is not None:
         encode_obj(buf, default_fn(data), float_bits, depth + 1, max_depth, default_fn)
     elif _encode_buffer(buf, data) == 0:
@@ -521,9 +534,14 @@ cdef inline void dec_check_remaining(Decoder *d, size_t needed) except *:
         raise ValueError(f"Truncated rencode payload: need {needed} bytes at pos {d.pos}, total length {d.length}")
 
 cdef inline uint64_t dec_read_leb128(Decoder *d) except *:
-    cdef uint64_t result = 0
-    cdef int shift = 0
-    cdef uint8_t byte
+    dec_check_remaining(d, 1)
+    cdef uint8_t byte = d.data[d.pos]
+    d.pos += 1
+    if (byte & 0x80) == 0:
+        return byte
+
+    cdef uint64_t result = <uint64_t>(byte & 0x7F)
+    cdef int shift = 7
     while True:
         dec_check_remaining(d, 1)
         byte = d.data[d.pos]
@@ -599,9 +617,10 @@ cdef object decode_obj(Decoder *d):
     cdef uint8_t opcode = d.data[d.pos]
     d.pos += 1
 
-    cdef size_t count, slen, i
-    cdef object l, t, di, item, k, v, s, b, raw
-    cdef uint64_t tag, blen
+    cdef size_t count, slen, i, blen
+    cdef uint64_t tag, ulen, ucount
+    cdef int8_t res_i8
+    cdef object l, t, di, item, k, v, s, b, raw, res_int
 
     # Fixed Positive Integers (0x00 - 0x3F: 0 to 63)
     if opcode < OP_POS_INT_START + OP_POS_INT_COUNT:
@@ -696,27 +715,30 @@ cdef object decode_obj(Decoder *d):
     elif opcode == OP_FLOAT64:
         return dec_read_float64_le(d)
     elif opcode == OP_STR_V:
-        slen = <size_t>dec_read_leb128(d)
-        if slen > d.length - d.pos:
-            raise ValueError(f"Truncated rencode payload: string length {slen} exceeds remaining buffer")
+        ulen = dec_read_leb128(d)
+        if ulen > <uint64_t>(d.length - d.pos):
+            raise ValueError(f"Truncated rencode payload: string length {ulen} exceeds remaining buffer")
+        slen = <size_t>ulen
         if slen == 0:
             return ""
         s = PyUnicode_DecodeUTF8(<const char*>&d.data[d.pos], slen, "strict")
         d.pos += slen
         return s
     elif opcode == OP_BIN_V:
-        slen = <size_t>dec_read_leb128(d)
-        if slen > d.length - d.pos:
-            raise ValueError(f"Truncated rencode payload: bytes length {slen} exceeds remaining buffer")
+        ulen = dec_read_leb128(d)
+        if ulen > <uint64_t>(d.length - d.pos):
+            raise ValueError(f"Truncated rencode payload: bytes length {ulen} exceeds remaining buffer")
+        slen = <size_t>ulen
         if slen == 0:
             return b""
         b = PyBytes_FromStringAndSize(<const char*>&d.data[d.pos], slen)
         d.pos += slen
         return b
     elif opcode == OP_LIST_V:
-        count = <size_t>dec_read_leb128(d)
-        if count > d.length - d.pos:
-            raise ValueError(f"Truncated rencode payload: declared list count {count} exceeds remaining buffer")
+        ucount = dec_read_leb128(d)
+        if ucount > <uint64_t>(d.length - d.pos):
+            raise ValueError(f"Truncated rencode payload: declared list count {ucount} exceeds remaining buffer")
+        count = <size_t>ucount
         l = PyList_New(count)
         d.depth += 1
         for i in range(count):
@@ -726,9 +748,10 @@ cdef object decode_obj(Decoder *d):
         d.depth -= 1
         return l
     elif opcode == OP_DICT_V:
-        count = <size_t>dec_read_leb128(d)
-        if count > (d.length - d.pos) / 2:
-            raise ValueError(f"Truncated rencode payload: declared dict count {count} exceeds remaining buffer")
+        ucount = dec_read_leb128(d)
+        if ucount > <uint64_t>((d.length - d.pos) / 2):
+            raise ValueError(f"Truncated rencode payload: declared dict count {ucount} exceeds remaining buffer")
+        count = <size_t>ucount
         di = _PyDict_NewPresized(count)
         d.depth += 1
         for i in range(count):
@@ -738,9 +761,10 @@ cdef object decode_obj(Decoder *d):
         d.depth -= 1
         return di
     elif opcode == OP_TUPLE_V:
-        count = <size_t>dec_read_leb128(d)
-        if count > d.length - d.pos:
-            raise ValueError(f"Truncated rencode payload: declared tuple count {count} exceeds remaining buffer")
+        ucount = dec_read_leb128(d)
+        if ucount > <uint64_t>(d.length - d.pos):
+            raise ValueError(f"Truncated rencode payload: declared tuple count {ucount} exceeds remaining buffer")
+        count = <size_t>ucount
         t = PyTuple_New(count)
         d.depth += 1
         for i in range(count):
@@ -750,19 +774,21 @@ cdef object decode_obj(Decoder *d):
         d.depth -= 1
         return t
     elif opcode == OP_BIGINT:
-        blen = dec_read_leb128(d)
-        if blen > d.length - d.pos:
-            raise ValueError(f"Truncated rencode payload: bigint byte length {blen} exceeds remaining buffer")
-        raw = PyBytes_FromStringAndSize(<const char*>&d.data[d.pos], <size_t>blen)
-        d.pos += <size_t>blen
-        return int.from_bytes(raw, byteorder="little", signed=True)
+        ulen = dec_read_leb128(d)
+        if ulen > <uint64_t>(d.length - d.pos):
+            raise ValueError(f"Truncated rencode payload: bigint byte length {ulen} exceeds remaining buffer")
+        blen = <size_t>ulen
+        res_int = _PyLong_FromByteArray(<const unsigned char*>&d.data[d.pos], blen, 1, 1)
+        d.pos += blen
+        return res_int
     elif opcode == OP_EXT:
         tag = dec_read_leb128(d)
-        blen = dec_read_leb128(d)
-        if blen > d.length - d.pos:
-            raise ValueError(f"Truncated rencode payload: extension byte length {blen} exceeds remaining buffer")
-        raw = PyBytes_FromStringAndSize(<const char*>&d.data[d.pos], <size_t>blen)
-        d.pos += <size_t>blen
+        ulen = dec_read_leb128(d)
+        if ulen > <uint64_t>(d.length - d.pos):
+            raise ValueError(f"Truncated rencode payload: extension byte length {ulen} exceeds remaining buffer")
+        blen = <size_t>ulen
+        raw = PyBytes_FromStringAndSize(<const char*>&d.data[d.pos], blen)
+        d.pos += blen
         if d.ext_hook != NULL:
             return (<object>d.ext_hook)(tag, raw)
         return Ext(tag, raw)
