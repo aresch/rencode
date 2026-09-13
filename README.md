@@ -30,8 +30,8 @@ assert isinstance(decoded["avatar_jpeg"], bytes)
 - **Type Separation**: First-class, distinct encodings for UTF-8 text (`str`) and raw binary (`bytes`). `loads()` seamlessly preserves both without ambiguous `decode_utf8` flags.
 - **Collection Fidelity**: Lists (`list`) and tuples (`tuple`) maintain their distinct types across serialization (`loads(dumps([1, 2])) == [1, 2]`).
 - **Framing & Delimiter Elimination**: All variable-length sequences, strings, and maps are count- or length-prefixed with LEB128 varints. The legacy bencode ASCII string length parsing (`255:data`) and container terminator scanning (`0x7F`) have been completely eliminated.
-- **Up to 58x Faster Serialization**: Stack buffer allocation for small payloads, direct `PyDict_Next` iteration, indexed list/tuple access, C-register integer bounds extraction via `PyLong_AsLongLongAndOverflow`, coalesced multi-byte writes, and geometric buffer growth eliminate heap churn and the $O(N^2)$ reallocation bottlenecks of v1.
-- **Up to 7.3x Faster Deserialization**: Pre-sized container allocation (`PyList_New`, `_PyDict_NewPresized`) and `PyDict_SetItem` replace dynamic array resizing and abstract protocol dispatch.
+- **Up to 65x Faster Serialization**: Stack buffer allocation for small payloads, direct `PyDict_Next` iteration, indexed list/tuple access, C-register integer bounds extraction via `PyLong_AsLongLongAndOverflow`, coalesced multi-byte writes, and geometric buffer growth eliminate heap churn and the $O(N^2)$ reallocation bottlenecks of v1.
+- **Up to 8.2x Faster Deserialization**: Pre-sized container allocation (`PyList_New`, `_PyDict_NewPresized`), SIMD-accelerated string decoding (`PyUnicode_FromStringAndSize`), inlined scalar parsers, and zero-exception-check bounds validation replace dynamic array resizing and abstract protocol dispatch.
 - **Buffer Protocol & Subclass Support**: `loads()` and `dumps()` natively handle `bytes`, `bytearray`, and `memoryview` without copying; `dumps()` seamlessly serializes Python subclasses (`IntEnum`, `OrderedDict`, `namedtuple`).
 - **Extensions & Custom Types**: Open extension mechanism (`OP_EXT = 0xFF`) with first-class `Ext(tag, data)` type, `dumps(..., default=...)` serialization callbacks, and `loads(..., ext_hook=...)` deserialization hooks.
 - **File Stream APIs**: Standard `dump(obj, fp)` and `load(fp)` functions for file-like objects.
@@ -84,23 +84,56 @@ To evaluate wire-format efficiency, we compare Rencode v2 against Rencode v1 (`m
 
 Benchmarks were measured on Linux x86_64 using Python 3.13.12, executing both versions compiled as native Cython C-extensions over identical test payloads.
 
+### 1. Representative Workloads & Microbenchmarks
+
 Execution time is measured in **microseconds ($\mu s$) per operation** (lower is better):
 
 | Benchmark Payload | Encode v1 | Encode v2 | Encode Speedup | Decode v1 | Decode v2 | Decode Speedup |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `small_int_42` | 0.07 $\mu s$ | 0.05 $\mu s$ | **1.31x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.13x** |
-| `int_200` | 0.10 $\mu s$ | 0.08 $\mu s$ | **1.23x** | 0.05 $\mu s$ | 0.05 $\mu s$ | **1.06x** |
-| `int_65000` | 0.11 $\mu s$ | 0.08 $\mu s$ | **1.36x** | 0.08 $\mu s$ | 0.08 $\mu s$ | **1.04x** |
-| `int_3_billion` | 0.37 $\mu s$ | 0.08 $\mu s$ | **4.43x** | 0.08 $\mu s$ | 0.08 $\mu s$ | **1.00x** |
-| `str_64_chars` | 0.34 $\mu s$ | 0.09 $\mu s$ | **3.93x** | 0.13 $\mu s$ | 0.10 $\mu s$ | **1.26x** |
-| `str_1000_chars` | 0.45 $\mu s$ | 0.16 $\mu s$ | **2.79x** | 0.17 $\mu s$ | 0.21 $\mu s$ | 0.80x |
-| `bytes_1000` | 0.34 $\mu s$ | 0.14 $\mu s$ | **2.48x** | 0.16 $\mu s$ | 0.12 $\mu s$ | **1.34x** |
-| `small_list_5` | 0.29 $\mu s$ | 0.14 $\mu s$ | **2.07x** | 0.15 $\mu s$ | 0.12 $\mu s$ | **1.24x** |
-| `list_1000_ints` | 42.81 $\mu s$ | 8.69 $\mu s$ | **4.93x** | 25.97 $\mu s$ | 17.36 $\mu s$ | **1.50x** |
-| `small_dict_5` | 0.96 $\mu s$ | 0.23 $\mu s$ | **4.26x** | 0.22 $\mu s$ | 0.22 $\mu s$ | 0.99x |
-| `dict_1000_pairs` | 179.29 $\mu s$ | 24.87 $\mu s$ | **7.21x** | 87.71 $\mu s$ | 82.13 $\mu s$ | **1.07x** |
-| `nested_rpc_payload` | 29.80 $\mu s$ | 0.51 $\mu s$ | **57.94x** | 8.01 $\mu s$ | 1.10 $\mu s$ | **7.31x** |
-| `torrent_metadata` | 28.63 $\mu s$ | 2.26 $\mu s$ | **12.68x** | 8.44 $\mu s$ | 5.39 $\mu s$ | **1.57x** |
+| `int_200` | 0.10 $\mu s$ | 0.08 $\mu s$ | **1.23x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.25x** |
+| `int_65000` | 0.11 $\mu s$ | 0.08 $\mu s$ | **1.36x** | 0.08 $\mu s$ | 0.05 $\mu s$ | **1.60x** |
+| `int_3_billion` | 0.37 $\mu s$ | 0.08 $\mu s$ | **4.43x** | 0.08 $\mu s$ | 0.06 $\mu s$ | **1.33x** |
+| `str_64_chars` | 0.34 $\mu s$ | 0.08 $\mu s$ | **4.25x** | 0.13 $\mu s$ | 0.08 $\mu s$ | **1.63x** |
+| `str_1000_chars` | 0.45 $\mu s$ | 0.13 $\mu s$ | **3.46x** | 0.17 $\mu s$ | 0.18 $\mu s$ | 0.94x |
+| `bytes_1000` | 0.34 $\mu s$ | 0.11 $\mu s$ | **3.09x** | 0.16 $\mu s$ | 0.10 $\mu s$ | **1.60x** |
+| `small_list_5` | 0.29 $\mu s$ | 0.12 $\mu s$ | **2.42x** | 0.15 $\mu s$ | 0.11 $\mu s$ | **1.36x** |
+| `list_1000_ints` | 42.81 $\mu s$ | 7.37 $\mu s$ | **5.81x** | 25.97 $\mu s$ | 14.87 $\mu s$ | **1.75x** |
+| `small_dict_5` | 0.96 $\mu s$ | 0.23 $\mu s$ | **4.17x** | 0.22 $\mu s$ | 0.21 $\mu s$ | **1.05x** |
+| `dict_1000_pairs` | 179.29 $\mu s$ | 24.87 $\mu s$ | **7.21x** | 87.71 $\mu s$ | 74.28 $\mu s$ | **1.18x** |
+| `nested_rpc_payload` | 29.80 $\mu s$ | 0.46 $\mu s$ | **64.78x** | 8.01 $\mu s$ | 0.98 $\mu s$ | **8.17x** |
+| `torrent_metadata` | 28.63 $\mu s$ | 2.05 $\mu s$ | **13.97x** | 8.44 $\mu s$ | 4.82 $\mu s$ | **1.75x** |
+
+### 2. Comprehensive Test Suite (`tests/timetest.py`)
+
+Aggregate benchmark execution across 1,000,000 iterations per test comparing `v2` against the `master` (v1) baseline:
+
+| Test Case | Description / Type | Encode v1 | Encode v2 | Encode Speedup | Decode v1 | Decode v2 | Decode Speedup |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `fixed_pos_int` | Single-byte positive int ($40$) | 0.148s | 0.071s | **2.1x** | 0.074s | 0.052s | **1.4x** |
+| `fixed_neg_int` | Single-byte negative int ($-29$) | 0.147s | 0.075s | **2.0x** | 0.092s | 0.059s | **1.5x** |
+| `int_char_size` | 8-bit integer ($100$) | 0.168s | 0.095s | **1.8x** | 0.074s | 0.052s | **1.4x** |
+| `int_short_size` | 16-bit integer ($27,123$) | 0.208s | 0.094s | **2.2x** | 0.111s | 0.064s | **1.7x** |
+| `int_int_size` | 32-bit integer ($7,483,648$) | 0.237s | 0.088s | **2.7x** | 0.116s | 0.066s | **1.7x** |
+| `int_long_long_size`| 64-bit integer ($8.22 \times 10^{18}$) | 0.713s | 0.086s | **8.3x** | 0.128s | 0.069s | **1.9x** |
+| `float_32bit` | 32-bit float value | 0.183s | 0.081s | **2.3x** | 0.096s | 0.060s | **1.6x** |
+| `float_64bit` | 64-bit float value | 0.185s | 0.083s | **2.2x** | 0.096s | 0.059s | **1.6x** |
+| `fixed_str` | Short string ($9$ bytes) | 0.178s | 0.080s | **2.2x** | 0.111s | 0.077s | **1.4x** |
+| `str` | Variable string ($255$ bytes) | 0.330s | 0.086s | **3.8x** | 0.195s | 0.082s | **2.4x** |
+| `none` | Singleton `None` | 0.147s | 0.065s | **2.3x** | 0.073s | 0.053s | **1.4x** |
+| `bool` | Singleton `True` | 0.166s | 0.064s | **2.6x** | 0.073s | 0.052s | **1.4x** |
+| `fixed_list` | Fixed list ($4$ elements) | 0.531s | 0.103s | **5.2x** | 0.184s | 0.112s | **1.6x** |
+| `list` | Variable list ($80$ elements) | 5.388s | 0.330s | **16.3x** | 1.236s | 0.616s | **2.0x** |
+| `fixed_dict` | Fixed dict ($11$ pairs) | 1.759s | 0.239s | **7.4x** | 0.626s | 0.361s | **1.7x** |
+| `dict` | Variable dict ($36$ pairs) | 5.323s | 0.568s | **9.4x** | 1.658s | 0.970s | **1.7x** |
+| `large_mixed_collection`\* | 6,000 mixed items | 5.896s | 0.366s | **16.1x** | 1.836s | 0.961s | **1.9x** |
+| `nested_structure`\* | 5 levels nested hierarchy | 0.105s | 0.009s | **11.9x** | 0.036s | 0.023s | **1.6x** |
+| `complex_dict`\* | Deeply nested mixed-key dict | 0.047s | 0.005s | **10.1x** | 0.014s | 0.011s | **1.2x** |
+| `large_string_data`\* | Multi-line text & Unicode | 0.197s | 0.020s | **9.9x** | 0.023s | 0.134s | 0.2x\*\* |
+| `mixed_numeric_collection`\* | 4,000 ints, floats, special nums | 4.791s | 0.389s | **12.3x** | 2.608s | 0.955s | **2.7x** |
+
+*\* Scaled to 10,000 iterations for large payloads.*
+*\*\* In v1, strings were decoded as unvalidated `bytes` by default; in v2, strings are validated UTF-8 and instantiated as Python `str` objects.*
 
 ---
 
