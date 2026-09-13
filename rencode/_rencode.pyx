@@ -33,12 +33,42 @@ from cpython.buffer cimport PyObject_GetBuffer, PyBuffer_Release, Py_buffer, PyB
 
 cdef extern from "Python.h":
     object _PyDict_NewPresized(Py_ssize_t minused)
+    long long PyLong_AsLongLongAndOverflow(object pylong, int *overflow)
+    void PyErr_Clear()
 from libc.stdlib cimport malloc, realloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t
 
+class Ext:
+    """
+    Container for Rencode v2 Extension type (opcode 0xFF).
+    """
+    __slots__ = ("tag", "data")
+
+    def __init__(self, tag, data):
+        if not isinstance(tag, int) or isinstance(tag, bool):
+            raise TypeError("Extension tag must be an integer")
+        if tag < 0:
+            raise ValueError("Extension tag must be non-negative")
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise TypeError("Extension data must be bytes-like")
+        self.tag = tag
+        self.data = bytes(data) if not isinstance(data, bytes) else data
+
+    def __repr__(self):
+        return f"Ext(tag={self.tag}, data={self.data!r})"
+
+    def __eq__(self, other):
+        if isinstance(other, Ext):
+            return self.tag == other.tag and self.data == other.data
+        return False
+
+    def __hash__(self):
+        return hash((self.tag, self.data))
+
+
 __version__ = ("Cython", 2, 0, 0)
-__all__ = ("dumps", "loads")
+__all__ = ("dumps", "loads", "Ext")
 
 # Opcode definitions for Rencode v2
 cdef enum:
@@ -120,20 +150,22 @@ cdef inline int buf_init(Buffer *buf) except -1:
 
 cdef inline int buf_ensure(Buffer *buf, size_t need) except -1:
     cdef size_t new_cap
+    cdef char *new_data
     if buf.pos + need > buf.capacity:
         new_cap = buf.capacity * 2
         if new_cap < buf.pos + need:
             new_cap = buf.pos + need + 1024
         if buf.data == buf.stack_buf:
-            buf.data = <char*>malloc(new_cap)
-            if buf.data == NULL:
-                buf.data = buf.stack_buf
+            new_data = <char*>malloc(new_cap)
+            if new_data == NULL:
                 raise MemoryError(f"Failed to allocate {new_cap} bytes")
-            memcpy(buf.data, buf.stack_buf, buf.pos)
+            memcpy(new_data, buf.stack_buf, buf.pos)
+            buf.data = new_data
         else:
-            buf.data = <char*>realloc(buf.data, new_cap)
-            if buf.data == NULL:
+            new_data = <char*>realloc(buf.data, new_cap)
+            if new_data == NULL:
                 raise MemoryError(f"Failed to expand buffer to {new_cap} bytes")
+            buf.data = new_data
         buf.capacity = new_cap
     return 0
 
@@ -165,77 +197,98 @@ cdef inline int buf_write_leb128(Buffer *buf, uint64_t val) except -1:
             break
     return 0
 
-cdef inline int buf_write_int16_le(Buffer *buf, int16_t val) except -1:
+cdef inline int buf_write_int8_entry(Buffer *buf, int8_t val) except -1:
+    buf_ensure(buf, 2)
+    buf.data[buf.pos] = <char>OP_INT8
+    buf.data[buf.pos + 1] = <char>val
+    buf.pos += 2
+    return 0
+
+cdef inline int buf_write_int16_entry(Buffer *buf, int16_t val) except -1:
+    buf_ensure(buf, 3)
+    buf.data[buf.pos] = <char>OP_INT16
     cdef uint16_t v = <uint16_t>val
     if RENCODE_BIG_ENDIAN:
         v = bswap_16(v)
-    buf_write_bytes(buf, &v, 2)
+    memcpy(&buf.data[buf.pos + 1], &v, 2)
+    buf.pos += 3
     return 0
 
-cdef inline int buf_write_int32_le(Buffer *buf, int32_t val) except -1:
+cdef inline int buf_write_int32_entry(Buffer *buf, int32_t val) except -1:
+    buf_ensure(buf, 5)
+    buf.data[buf.pos] = <char>OP_INT32
     cdef uint32_t v = <uint32_t>val
     if RENCODE_BIG_ENDIAN:
         v = bswap_32(v)
-    buf_write_bytes(buf, &v, 4)
+    memcpy(&buf.data[buf.pos + 1], &v, 4)
+    buf.pos += 5
     return 0
 
-cdef inline int buf_write_int64_le(Buffer *buf, int64_t val) except -1:
+cdef inline int buf_write_int64_entry(Buffer *buf, int64_t val) except -1:
+    buf_ensure(buf, 9)
+    buf.data[buf.pos] = <char>OP_INT64
     cdef uint64_t v = <uint64_t>val
     if RENCODE_BIG_ENDIAN:
         v = bswap_64(v)
-    buf_write_bytes(buf, &v, 8)
+    memcpy(&buf.data[buf.pos + 1], &v, 8)
+    buf.pos += 9
     return 0
 
-cdef inline int buf_write_float32_le(Buffer *buf, float val) except -1:
+cdef inline int buf_write_float32_entry(Buffer *buf, float val) except -1:
+    buf_ensure(buf, 5)
+    buf.data[buf.pos] = <char>OP_FLOAT32
     cdef uint32_t v = 0
     memcpy(&v, &val, 4)
     if RENCODE_BIG_ENDIAN:
         v = bswap_32(v)
-    buf_write_bytes(buf, &v, 4)
+    memcpy(&buf.data[buf.pos + 1], &v, 4)
+    buf.pos += 5
     return 0
 
-cdef inline int buf_write_float64_le(Buffer *buf, double val) except -1:
+cdef inline int buf_write_float64_entry(Buffer *buf, double val) except -1:
+    buf_ensure(buf, 9)
+    buf.data[buf.pos] = <char>OP_FLOAT64
     cdef uint64_t v = 0
     memcpy(&v, &val, 8)
     if RENCODE_BIG_ENDIAN:
         v = bswap_64(v)
-    buf_write_bytes(buf, &v, 8)
+    memcpy(&buf.data[buf.pos + 1], &v, 8)
+    buf.pos += 9
     return 0
 
 
 cdef inline int _encode_int(Buffer *buf, object data) except -1:
-    if 0 <= data <= 63:
-        buf_write_byte(buf, OP_POS_INT_START + <uint8_t>data)
-    elif -32 <= data <= -1:
-        buf_write_byte(buf, OP_NEG_INT_START + <uint8_t>(-data - 1))
-    elif -128 <= data <= 127:
-        buf_write_byte(buf, OP_INT8)
-        buf_write_byte(buf, <uint8_t>(<int8_t>data))
-    elif -32768 <= data <= 32767:
-        buf_write_byte(buf, OP_INT16)
-        buf_write_int16_le(buf, <int16_t>data)
-    elif -2147483648 <= data <= 2147483647:
-        buf_write_byte(buf, OP_INT32)
-        buf_write_int32_le(buf, <int32_t>data)
-    elif -9223372036854775808 <= data <= 9223372036854775807:
-        buf_write_byte(buf, OP_INT64)
-        buf_write_int64_le(buf, <int64_t>data)
+    cdef int overflow = 0
+    cdef long long val = PyLong_AsLongLongAndOverflow(data, &overflow)
+    cdef size_t byte_len
+    cdef object raw
+    if overflow == 0:
+        if 0 <= val <= 63:
+            buf_write_byte(buf, OP_POS_INT_START + <uint8_t>val)
+        elif -32 <= val <= -1:
+            buf_write_byte(buf, OP_NEG_INT_START + <uint8_t>(-val - 1))
+        elif -128 <= val <= 127:
+            buf_write_int8_entry(buf, <int8_t>val)
+        elif -32768 <= val <= 32767:
+            buf_write_int16_entry(buf, <int16_t>val)
+        elif -2147483648 <= val <= 2147483647:
+            buf_write_int32_entry(buf, <int32_t>val)
+        else:
+            buf_write_int64_entry(buf, <int64_t>val)
     else:
         # Big integer
-        byte_len = (data.bit_length() + 8) // 8
+        byte_len = ((data + 1).bit_length() + 8) // 8 if data < 0 else (data.bit_length() + 8) // 8
         raw = data.to_bytes(byte_len, byteorder="little", signed=True)
         buf_write_byte(buf, OP_BIGINT)
         buf_write_leb128(buf, len(raw))
         buf_write_bytes(buf, PyBytes_AS_STRING(raw), len(raw))
     return 0
 
-cdef inline int _encode_float(Buffer *buf, object data, int float_bits) except -1:
+cdef inline int _encode_float(Buffer *buf, double data, int float_bits) except -1:
     if float_bits == 64:
-        buf_write_byte(buf, OP_FLOAT64)
-        buf_write_float64_le(buf, <double>data)
+        buf_write_float64_entry(buf, data)
     elif float_bits == 32:
-        buf_write_byte(buf, OP_FLOAT32)
-        buf_write_float32_le(buf, <float>data)
+        buf_write_float32_entry(buf, <float>data)
     else:
         raise ValueError(f"Float bits ({float_bits}) is not 32 or 64")
     return 0
@@ -244,8 +297,11 @@ cdef inline int _encode_str(Buffer *buf, object data) except -1:
     cdef Py_ssize_t slen = 0
     cdef const char *str_data = PyUnicode_AsUTF8AndSize(data, &slen)
     if slen < OP_STR_FIXED_COUNT:
-        buf_write_byte(buf, OP_STR_FIXED_START + <uint8_t>slen)
-        buf_write_bytes(buf, str_data, slen)
+        buf_ensure(buf, 1 + slen)
+        buf.data[buf.pos] = <char>(OP_STR_FIXED_START + <uint8_t>slen)
+        if slen > 0:
+            memcpy(&buf.data[buf.pos + 1], str_data, slen)
+        buf.pos += 1 + slen
     else:
         buf_write_byte(buf, OP_STR_V)
         buf_write_leb128(buf, <uint64_t>slen)
@@ -255,15 +311,64 @@ cdef inline int _encode_str(Buffer *buf, object data) except -1:
 cdef inline int _encode_bytes(Buffer *buf, object data) except -1:
     cdef Py_ssize_t slen = PyBytes_GET_SIZE(data)
     if slen < OP_BIN_FIXED_COUNT:
-        buf_write_byte(buf, OP_BIN_FIXED_START + <uint8_t>slen)
-        buf_write_bytes(buf, PyBytes_AS_STRING(data), slen)
+        buf_ensure(buf, 1 + slen)
+        buf.data[buf.pos] = <char>(OP_BIN_FIXED_START + <uint8_t>slen)
+        if slen > 0:
+            memcpy(&buf.data[buf.pos + 1], PyBytes_AS_STRING(data), slen)
+        buf.pos += 1 + slen
     else:
         buf_write_byte(buf, OP_BIN_V)
         buf_write_leb128(buf, <uint64_t>slen)
         buf_write_bytes(buf, PyBytes_AS_STRING(data), slen)
     return 0
 
-cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max_depth) except -1:
+cdef inline int _encode_buffer(Buffer *buf, object data) except -1:
+    cdef Py_buffer view
+    if PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) != 0:
+        PyErr_Clear()
+        return -2  # Not a buffer object
+    try:
+        if view.len < OP_BIN_FIXED_COUNT:
+            buf_ensure(buf, 1 + view.len)
+            buf.data[buf.pos] = <char>(OP_BIN_FIXED_START + <uint8_t>view.len)
+            if view.len > 0:
+                memcpy(&buf.data[buf.pos + 1], view.buf, view.len)
+            buf.pos += 1 + view.len
+        else:
+            buf_write_byte(buf, OP_BIN_V)
+            buf_write_leb128(buf, <uint64_t>view.len)
+            buf_write_bytes(buf, view.buf, view.len)
+    finally:
+        PyBuffer_Release(&view)
+    return 0
+
+cdef inline int _encode_ext(Buffer *buf, object ext_obj) except -1:
+    cdef object tag_obj = ext_obj.tag
+    cdef object data_obj = ext_obj.data
+    if not isinstance(tag_obj, int) or isinstance(tag_obj, bool):
+        raise TypeError("Extension tag must be an integer")
+    if tag_obj < 0:
+        raise ValueError("Extension tag must be non-negative")
+    cdef uint64_t tag = <uint64_t>tag_obj
+    cdef Py_buffer view
+    if PyBytes_Check(data_obj):
+        buf_write_byte(buf, OP_EXT)
+        buf_write_leb128(buf, tag)
+        buf_write_leb128(buf, <uint64_t>PyBytes_GET_SIZE(data_obj))
+        buf_write_bytes(buf, PyBytes_AS_STRING(data_obj), PyBytes_GET_SIZE(data_obj))
+    elif PyObject_GetBuffer(data_obj, &view, PyBUF_SIMPLE) == 0:
+        try:
+            buf_write_byte(buf, OP_EXT)
+            buf_write_leb128(buf, tag)
+            buf_write_leb128(buf, <uint64_t>view.len)
+            buf_write_bytes(buf, view.buf, view.len)
+        finally:
+            PyBuffer_Release(&view)
+    else:
+        raise TypeError("Extension data must be bytes-like")
+    return 0
+
+cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max_depth, object default_fn) except -1:
     if depth > max_depth:
         raise ValueError("Recursion limit exceeded while serializing")
 
@@ -283,11 +388,13 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
     elif type(data) is int:
         _encode_int(buf, data)
     elif type(data) is float:
-        _encode_float(buf, data, float_bits)
+        _encode_float(buf, <double>data, float_bits)
     elif type(data) is str:
         _encode_str(buf, data)
     elif type(data) is bytes:
         _encode_bytes(buf, data)
+    elif type(data) is bytearray:
+        _encode_buffer(buf, data)
     elif type(data) is list:
         count = len(data)
         if count < OP_LIST_FIXED_COUNT:
@@ -297,7 +404,7 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
             buf_write_leb128(buf, <uint64_t>count)
         l_data = <list>data
         for i in range(count):
-            encode_obj(buf, <object>PyList_GET_ITEM(l_data, i), float_bits, depth + 1, max_depth)
+            encode_obj(buf, <object>PyList_GET_ITEM(l_data, i), float_bits, depth + 1, max_depth, default_fn)
     elif type(data) is tuple:
         count = len(data)
         if count < OP_TUPLE_FIXED_COUNT:
@@ -307,7 +414,7 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
             buf_write_leb128(buf, <uint64_t>count)
         t_data = <tuple>data
         for i in range(count):
-            encode_obj(buf, <object>PyTuple_GET_ITEM(t_data, i), float_bits, depth + 1, max_depth)
+            encode_obj(buf, <object>PyTuple_GET_ITEM(t_data, i), float_bits, depth + 1, max_depth, default_fn)
     elif type(data) is dict:
         count = len(data)
         if count < OP_DICT_FIXED_COUNT:
@@ -317,14 +424,14 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
             buf_write_leb128(buf, <uint64_t>count)
         dict_pos = 0
         while PyDict_Next(data, &dict_pos, &pk, &pv):
-            encode_obj(buf, <object>pk, float_bits, depth + 1, max_depth)
-            encode_obj(buf, <object>pv, float_bits, depth + 1, max_depth)
+            encode_obj(buf, <object>pk, float_bits, depth + 1, max_depth, default_fn)
+            encode_obj(buf, <object>pv, float_bits, depth + 1, max_depth, default_fn)
     elif isinstance(data, bool):
         buf_write_byte(buf, OP_TRUE if data else OP_FALSE)
     elif isinstance(data, int):
         _encode_int(buf, data)
     elif isinstance(data, float):
-        _encode_float(buf, data, float_bits)
+        _encode_float(buf, <double>data, float_bits)
     elif isinstance(data, str):
         _encode_str(buf, data)
     elif isinstance(data, bytes):
@@ -337,7 +444,7 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
             buf_write_byte(buf, OP_LIST_V)
             buf_write_leb128(buf, <uint64_t>count)
         for item in data:
-            encode_obj(buf, item, float_bits, depth + 1, max_depth)
+            encode_obj(buf, item, float_bits, depth + 1, max_depth, default_fn)
     elif isinstance(data, tuple):
         count = len(data)
         if count < OP_TUPLE_FIXED_COUNT:
@@ -346,7 +453,7 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
             buf_write_byte(buf, OP_TUPLE_V)
             buf_write_leb128(buf, <uint64_t>count)
         for item in data:
-            encode_obj(buf, item, float_bits, depth + 1, max_depth)
+            encode_obj(buf, item, float_bits, depth + 1, max_depth, default_fn)
     elif isinstance(data, dict):
         count = len(data)
         if count < OP_DICT_FIXED_COUNT:
@@ -356,27 +463,41 @@ cdef int encode_obj(Buffer *buf, object data, int float_bits, int depth, int max
             buf_write_leb128(buf, <uint64_t>count)
         dict_pos = 0
         while PyDict_Next(data, &dict_pos, &pk, &pv):
-            encode_obj(buf, <object>pk, float_bits, depth + 1, max_depth)
-            encode_obj(buf, <object>pv, float_bits, depth + 1, max_depth)
+            encode_obj(buf, <object>pk, float_bits, depth + 1, max_depth, default_fn)
+            encode_obj(buf, <object>pv, float_bits, depth + 1, max_depth, default_fn)
+    elif isinstance(data, (bytearray, memoryview)):
+        _encode_buffer(buf, data)
+    elif isinstance(data, Ext):
+        _encode_ext(buf, data)
+    elif default_fn is not None:
+        encode_obj(buf, default_fn(data), float_bits, depth + 1, max_depth, default_fn)
+    elif _encode_buffer(buf, data) == 0:
+        return 0
     else:
         raise TypeError(f"type {type(data)} not handled")
 
     return 0
 
 
-def dumps(data, float_bits=DEFAULT_FLOAT_BITS, int max_depth=MAX_RECURSION_DEPTH):
+def dumps(data, float_bits=DEFAULT_FLOAT_BITS, int max_depth=MAX_RECURSION_DEPTH, default=None):
     """
     Encode Python object data into rencode v2 binary format.
 
     :param data: The object to serialize
     :param float_bits: Floating point precision (32 or 64, default 64)
     :param max_depth: Maximum recursion depth allowed (default 1000)
+    :param default: Optional function called for objects that cannot otherwise be serialized
     :return: Serialized bytes
     """
+    if float_bits != 32 and float_bits != 64:
+        raise ValueError(f"Float bits ({float_bits}) is not 32 or 64")
+    if max_depth <= 0:
+        raise ValueError(f"max_depth must be positive, got {max_depth}")
+
     cdef Buffer buf
     buf_init(&buf)
     try:
-        encode_obj(&buf, data, float_bits, 0, max_depth)
+        encode_obj(&buf, data, float_bits, 0, max_depth, default)
         return PyBytes_FromStringAndSize(buf.data, buf.pos)
     finally:
         if buf.data != buf.stack_buf:
@@ -393,6 +514,7 @@ cdef struct Decoder:
     size_t pos
     int depth
     int max_depth
+    PyObject *ext_hook
 
 cdef inline void dec_check_remaining(Decoder *d, size_t needed) except *:
     if d.pos + needed > d.length or d.pos + needed < d.pos:
@@ -641,10 +763,12 @@ cdef object decode_obj(Decoder *d):
             raise ValueError(f"Truncated rencode payload: extension byte length {blen} exceeds remaining buffer")
         raw = PyBytes_FromStringAndSize(<const char*>&d.data[d.pos], <size_t>blen)
         d.pos += <size_t>blen
-        raise NotImplementedError(f"Extension tag {tag} not implemented")
+        if d.ext_hook != NULL:
+            return (<object>d.ext_hook)(tag, raw)
+        return Ext(tag, raw)
 
 
-def loads(object data, decode_utf8=None, int max_depth=MAX_RECURSION_DEPTH):
+def loads(object data, decode_utf8=None, int max_depth=MAX_RECURSION_DEPTH, ext_hook=None):
     """
     Decode rencode v2 binary data into Python objects.
 
@@ -653,8 +777,12 @@ def loads(object data, decode_utf8=None, int max_depth=MAX_RECURSION_DEPTH):
     :param data: The binary payload to decode
     :param decode_utf8: Deprecated / unused in v2 (text/binary distinction is preserved on wire)
     :param max_depth: Maximum recursion depth allowed (default 1000)
+    :param ext_hook: Optional callable(tag: int, data: bytes) -> object for custom extension tags
     :return: The decoded Python object
     """
+    if max_depth <= 0:
+        raise ValueError(f"max_depth must be positive, got {max_depth}")
+
     cdef Decoder d
     cdef Py_buffer view
     cdef int has_buffer = 0
@@ -672,6 +800,7 @@ def loads(object data, decode_utf8=None, int max_depth=MAX_RECURSION_DEPTH):
     d.pos = 0
     d.depth = 0
     d.max_depth = max_depth
+    d.ext_hook = <PyObject*>ext_hook if ext_hook is not None else NULL
 
     try:
         res = decode_obj(&d)

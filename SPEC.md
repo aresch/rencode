@@ -115,6 +115,10 @@ Opcode `0xFF` provides an open extension mechanism:
 - Format: `0xFF` + LEB128 `tag` + LEB128 `byte_length` + `payload_bytes`.
 - Tags `0x00`–`0x7F` are reserved for future standardization (e.g. timestamps, UUIDs, decimals).
 - Tags `>= 0x80` are available for application-specific custom types.
+- **Python API Integration**:
+  - `rencode.Ext(tag, data)` represents an extension object.
+  - `dumps(obj, default=...)`: `default` is called when an object cannot otherwise be serialized, enabling conversion to standard types or `Ext`.
+  - `loads(bytes, ext_hook=...)`: If `ext_hook(tag, data)` is provided, it is invoked to deserialize extension payloads; otherwise, returns an `Ext(tag, data)` instance preserving wire fidelity.
 
 ---
 

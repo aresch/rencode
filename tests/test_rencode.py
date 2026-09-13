@@ -377,9 +377,126 @@ class TestRencodeV2(unittest.TestCase):
         payload = b"custom-payload-bytes"
         raw = b"\xff" + leb128_encode(tag) + leb128_encode(len(payload)) + payload
 
-        # Direct loading of unhandled extension raises NotImplementedError
-        with self.assertRaises(NotImplementedError):
-            rencode.loads(raw)
+        # Loading extension without ext_hook returns Ext object
+        res = rencode.loads(raw)
+        self.assertIsInstance(res, rencode.Ext)
+        self.assertEqual(res.tag, tag)
+        self.assertEqual(res.data, payload)
+        self.assertEqual(res, rencode.Ext(tag, payload))
+
+    def test_ext_roundtrip(self):
+        ext = rencode.Ext(0x99, b"\x01\x02\x03\x04")
+        enc = rencode.dumps(ext)
+        self.assertEqual(enc[0], 0xFF)
+        self.assertEqual(rencode.loads(enc), ext)
+
+        # In nested structure
+        nested = {"ext": ext, "list": [1, ext]}
+        self.assertEqual(rencode.loads(rencode.dumps(nested)), nested)
+
+        # Ext equality and repr
+        self.assertEqual(repr(ext), "Ext(tag=153, data=b'\\x01\\x02\\x03\\x04')")
+        self.assertEqual(ext, rencode.Ext(0x99, bytearray(b"\x01\x02\x03\x04")))
+        self.assertNotEqual(ext, rencode.Ext(0x98, b"\x01\x02\x03\x04"))
+        self.assertNotEqual(ext, "not an ext")
+
+    def test_ext_hook(self):
+        # Custom type deserialization via ext_hook
+        class Point:
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+            def __eq__(self, other):
+                return (
+                    isinstance(other, Point) and self.x == other.x and self.y == other.y
+                )
+
+        def ext_decoder(tag, data):
+            if tag == 0x10:
+                x, y = struct.unpack("<ii", data)
+                return Point(x, y)
+            return rencode.Ext(tag, data)
+
+        pt_data = struct.pack("<ii", 10, -20)
+        ext = rencode.Ext(0x10, pt_data)
+        enc = rencode.dumps(ext)
+
+        decoded = rencode.loads(enc, ext_hook=ext_decoder)
+        self.assertEqual(decoded, Point(10, -20))
+
+    def test_dumps_default(self):
+        import datetime
+
+        dt = datetime.datetime(2026, 9, 12, 12, 0, 0)
+
+        def default_serializer(obj):
+            if isinstance(obj, datetime.datetime):
+                return obj.isoformat()
+            if isinstance(obj, set):
+                return sorted(list(obj))
+            raise TypeError(f"Cannot serialize {type(obj)}")
+
+        payload = {"time": dt, "set": {3, 1, 2}}
+        enc = rencode.dumps(payload, default=default_serializer)
+        dec = rencode.loads(enc)
+        self.assertEqual(dec, {"time": dt.isoformat(), "set": [1, 2, 3]})
+
+    def test_dumps_buffer_protocol(self):
+        ba = bytearray(b"bytearray_test")
+        enc_ba = rencode.dumps(ba)
+        self.assertEqual(rencode.loads(enc_ba), b"bytearray_test")
+
+        mv = memoryview(b"memoryview_test")
+        enc_mv = rencode.dumps(mv)
+        self.assertEqual(rencode.loads(enc_mv), b"memoryview_test")
+
+    def test_int64_and_bigint_boundaries(self):
+        vals = [
+            0,
+            63,
+            64,
+            127,
+            128,
+            32767,
+            32768,
+            2147483647,
+            2147483648,
+            9223372036854775807,
+            9223372036854775808,
+            -1,
+            -32,
+            -33,
+            -128,
+            -129,
+            -32768,
+            -32769,
+            -2147483648,
+            -2147483649,
+            -9223372036854775808,
+            -9223372036854775809,
+            -(1 << 71),
+            (1 << 71),
+            -(1 << 127),
+            (1 << 127),
+        ]
+        for v in vals:
+            self.assertEqual(rencode.loads(rencode.dumps(v)), v)
+
+    def test_argument_validation(self):
+        # float_bits must be 32 or 64 upfront
+        with self.assertRaises(ValueError):
+            rencode.dumps("no floats here", float_bits=42)
+
+        # max_depth must be > 0
+        with self.assertRaises(ValueError):
+            rencode.dumps(1, max_depth=0)
+        with self.assertRaises(ValueError):
+            rencode.dumps(1, max_depth=-5)
+        with self.assertRaises(ValueError):
+            rencode.loads(b"\x01", max_depth=0)
+        with self.assertRaises(ValueError):
+            rencode.loads(b"\x01", max_depth=-1)
 
     # ----------------------------------------------------------------------
     # Security, Validation & Error Handling

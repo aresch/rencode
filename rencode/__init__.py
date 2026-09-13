@@ -1,4 +1,4 @@
-from rencode._rencode import __version__, dumps, loads
+from rencode._rencode import Ext, __version__, dumps, loads
 
 
 def dump(data, fp, **kwargs):
@@ -15,4 +15,4 @@ def load(fp, **kwargs):
     return loads(fp.read(), **kwargs)
 
 
-__all__ = ["__version__", "dump", "dumps", "load", "loads"]
+__all__ = ["Ext", "__version__", "dump", "dumps", "load", "loads"]
