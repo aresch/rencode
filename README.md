@@ -1,194 +1,120 @@
 # rencode
 
-The rencode module is similar to bencode from the BitTorrent project.  For complex, heterogeneous data structures with many small elements, r-encodings take up significantly less space than b-encodings:
+`rencode` is a fast, compact binary object serialization library for Python. It is designed to be space-efficient by packing type information, small integer values, and short container lengths directly into single-byte opcodes.
 
-```
->>> len(rencode.dumps({'a':0, 'b':[1,2], 'c':99}))
-13
+Originally derived from BitTorrent's `bencode` algorithm, **Rencode Version 2** modernizes the format into a high-throughput, clean binary protocol with full type fidelity, native little-endian encoding, count-prefixed framing, and strong security guarantees.
 
->>> len(bencode.bencode({'a':0, 'b':[1,2], 'c':99}))
-26
-```
+```python
+import rencode
 
-This version of rencode is a complete rewrite in Cython to attempt to increase the performance over the pure Python module written by Petru Paler, Connelly Barnes et al.
+payload = {
+    "user_id": 42,
+    "username": "aresch",
+    "active": True,
+    "scores": [98.5, 99.1, 100.0],
+    "avatar_jpeg": b"\xff\xd8\xff\xe0\x00\x10JFIF",
+}
 
-## Data Format
-See [SPEC](SPEC.md)
+encoded = rencode.dumps(payload)
+decoded = rencode.loads(encoded)
 
-## Performance Comparison
-The test program used for these results is included in the repository:
-https://github.com/aresch/rencode/blob/master/tests/timetest.py
-
-### Encode functions
-```
-test_encode_fixed_pos_int:
-	rencode.pyx: 0.003s (+0.013s) 589.17%
-	rencode.py:  0.016s
-
-test_encode_int_int_size:
-	rencode.pyx: 0.006s (+0.032s) 625.99%
-	rencode.py:  0.038s
-
-test_encode_int_long_long_size:
-	rencode.pyx: 0.014s (+0.026s) 279.96%
-	rencode.py:  0.040s
-
-test_encode_int_short_size:
-	rencode.pyx: 0.006s (+0.030s) 629.80%
-	rencode.py:  0.036s
-
-test_encode_str:
-	rencode.pyx: 0.006s (+0.010s) 263.96%
-	rencode.py:  0.017s
-
-test_encode_dict:
-	rencode.pyx: 0.135s (+0.302s) 324.68%
-	rencode.py:  0.437s
-
-test_encode_fixed_list:
-	rencode.pyx: 0.012s (+0.025s) 307.78%
-	rencode.py:  0.037s
-
-test_encode_fixed_neg_int:
-	rencode.pyx: 0.003s (+0.012s) 536.97%
-	rencode.py:  0.015s
-
-test_encode_fixed_dict:
-	rencode.pyx: 0.046s (+0.105s) 331.07%
-	rencode.py:  0.151s
-
-test_encode_int_char_size:
-	rencode.pyx: 0.005s (+0.029s) 687.64%
-	rencode.py:  0.034s
-
-test_encode_fixed_str:
-	rencode.pyx: 0.003s (+0.011s) 438.07%
-	rencode.py:  0.015s
-
-test_encode_list:
-	rencode.pyx: 0.148s (+0.228s) 253.68%
-	rencode.py:  0.376s
-
-test_encode_none:
-	rencode.pyx: 0.004s (+0.011s) 386.06%
-	rencode.py:  0.014s
-
-test_encode_int_big_number:
-	rencode.pyx: 0.011s (+0.019s) 264.32%
-	rencode.py:  0.030s
-
-test_encode_float_64bit:
-	rencode.pyx: 0.003s (+0.011s) 416.19%
-	rencode.py:  0.014s
-
-test_encode_bool:
-	rencode.pyx: 0.004s (+0.014s) 447.57%
-	rencode.py:  0.018s
-
-test_encode_float_32bit:
-	rencode.pyx: 0.003s (+0.010s) 417.86%
-	rencode.py:  0.014s
-
-Encode functions totals:
-	rencode.pyx: 0.412s (+0.888s) 315.49%
-	rencode.py:  1.301s
-```
-### Decode functions
-
-```
-test_decode_fixed_list:
-	rencode.pyx: 0.003s (+0.020s) 848.67%
-	rencode.py:  0.022s
-
-test_decode_int_long_long_size:
-	rencode.pyx: 0.003s (+0.013s) 484.80%
-	rencode.py:  0.016s
-
-test_decode_dict:
-	rencode.pyx: 0.267s (+0.406s) 251.81%
-	rencode.py:  0.673s
-
-test_decode_fixed_dict:
-	rencode.pyx: 0.087s (+0.123s) 241.32%
-	rencode.py:  0.211s
-
-test_decode_float_32bit:
-	rencode.pyx: 0.002s (+0.007s) 536.88%
-	rencode.py:  0.009s
-
-test_decode_int_big_number:
-	rencode.pyx: 0.007s (+0.010s) 256.05%
-	rencode.py:  0.017s
-
-test_decode_int_char_size:
-	rencode.pyx: 0.002s (+0.014s) 754.12%
-	rencode.py:  0.016s
-
-test_decode_fixed_neg_int:
-	rencode.pyx: 0.001s (+0.004s) 389.03%
-	rencode.py:  0.006s
-
-test_decode_fixed_str:
-	rencode.pyx: 0.009s (+0.009s) 199.78%
-	rencode.py:  0.019s
-
-test_decode_float_64bit:
-	rencode.pyx: 0.002s (+0.007s) 540.17%
-	rencode.py:  0.009s
-
-test_decode_bool:
-	rencode.pyx: 0.002s (+0.004s) 369.49%
-	rencode.py:  0.006s
-
-test_decode_fixed_pos_int:
-	rencode.pyx: 0.002s (+0.004s) 368.96%
-	rencode.py:  0.006s
-
-test_decode_list:
-	rencode.pyx: 0.019s (+0.247s) 1403.77%
-	rencode.py:  0.266s
-
-test_decode_none:
-	rencode.pyx: 0.002s (+0.004s) 367.05%
-	rencode.py:  0.006s
-
-test_decode_int_short_size:
-	rencode.pyx: 0.002s (+0.014s) 716.47%
-	rencode.py:  0.016s
-
-test_decode_str:
-	rencode.pyx: 0.010s (+0.026s) 364.51%
-	rencode.py:  0.036s
-
-test_decode_int_int_size:
-	rencode.pyx: 0.002s (+0.014s) 705.92%
-	rencode.py:  0.016s
-
-Decode functions totals:
-	rencode.pyx: 0.421s (+0.926s) 319.79%
-	rencode.py:  1.348s
+assert decoded == payload
+assert isinstance(decoded["username"], str)
+assert isinstance(decoded["avatar_jpeg"], bytes)
 ```
 
-### Overall functions
+---
 
+## What's New in Version 2
+
+- **Type Separation**: First-class, distinct encodings for UTF-8 text (`str`) and raw binary (`bytes`). `loads()` seamlessly preserves both without ambiguous `decode_utf8` flags.
+- **Collection Fidelity**: Lists (`list`) and tuples (`tuple`) maintain their distinct types across serialization (`loads(dumps([1, 2])) == [1, 2]`).
+- **Framing & Delimiter Elimination**: All variable-length sequences, strings, and maps are count- or length-prefixed with LEB128 varints. The legacy bencode ASCII string length parsing (`255:data`) and container terminator scanning (`0x7F`) have been completely eliminated.
+- **Up to 5.38x Faster Serialization**: A geometric buffer growth strategy eliminates the $O(N^2)$ reallocation bottlenecks of v1.
+- **Up to 1.59x Faster Deserialization**: Pre-sized container allocation (`PyList_New`, `_PyDict_NewPresized`) replaces dynamic array resizing.
+- **50% Smaller Big Integers**: Large integers ($\ge 2^{64}$) encode as raw two's-complement bytes rather than ASCII decimal strings, removing the 64-character limit and supporting arbitrary cryptographic numbers ($> 256$ bits).
+- **IEEE 754 64-Bit Float Precision**: Floating point numbers default to full 64-bit double precision, avoiding the silent truncation of v1.
+- **Native Little-Endian**: Multi-byte numbers and floats serialize in little-endian byte order, matching modern CPU architectures (x86_64, ARM64, Apple Silicon, RISC-V).
+- **Security Safeguards**: Decoders enforce a recursion depth limit (default: 1000) to protect against stack exhaustion crashes, and strictly reject unconsumed trailing bytes.
+
+For the complete wire format specification, see [SPEC.md](SPEC.md).
+
+---
+
+## Benchmark Comparison: Version 1 (`master`) vs Version 2 (`v2`)
+
+Benchmarks were measured on Linux x86_64 using Python 3.13.12, executing both versions compiled as native Cython C-extensions over identical test payloads.
+
+### 1. Performance & Speedup
+
+Execution time is measured in **microseconds ($\mu s$) per operation** (lower is better):
+
+| Benchmark Payload | Encode v1 | Encode v2 | Encode Speedup | Decode v1 | Decode v2 | Decode Speedup |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `small_int_42` | 0.07 $\mu s$ | 0.06 $\mu s$ | **1.11x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.09x** |
+| `int_200` | 0.10 $\mu s$ | 0.10 $\mu s$ | **1.04x** | 0.05 $\mu s$ | 0.04 $\mu s$ | **1.05x** |
+| `int_65000` | 0.11 $\mu s$ | 0.10 $\mu s$ | **1.08x** | 0.08 $\mu s$ | 0.06 $\mu s$ | **1.27x** |
+| `int_3_billion` | 0.37 $\mu s$ | 0.11 $\mu s$ | **3.42x** | 0.08 $\mu s$ | 0.06 $\mu s$ | **1.32x** |
+| `str_64_chars` | 0.34 $\mu s$ | 0.10 $\mu s$ | **3.29x** | 0.13 $\mu s$ | 0.10 $\mu s$ | **1.41x** |
+| `str_1000_chars` | 0.45 $\mu s$ | 0.17 $\mu s$ | **2.71x** | 0.17 $\mu s$ | 0.24 $\mu s$ | 0.70x |
+| `bytes_1000` | 0.34 $\mu s$ | 0.16 $\mu s$ | **2.19x** | 0.16 $\mu s$ | 0.13 $\mu s$ | **1.29x** |
+| `small_list_5` | 0.29 $\mu s$ | 0.13 $\mu s$ | **2.26x** | 0.15 $\mu s$ | 0.11 $\mu s$ | **1.35x** |
+| `list_1000_ints` | 42.81 $\mu s$ | 27.68 $\mu s$ | **1.55x** | 25.97 $\mu s$ | 16.38 $\mu s$ | **1.59x** |
+| `small_dict_5` | 0.96 $\mu s$ | 0.28 $\mu s$ | **3.48x** | 0.22 $\mu s$ | 0.21 $\mu s$ | **1.04x** |
+| `dict_1000_pairs` | 179.29 $\mu s$ | 54.06 $\mu s$ | **3.32x** | 87.71 $\mu s$ | 81.04 $\mu s$ | **1.08x** |
+| `nested_rpc_payload` | 29.80 $\mu s$ | 5.54 $\mu s$ | **5.38x** | 8.01 $\mu s$ | 8.09 $\mu s$ | 0.99x |
+| `torrent_metadata` | 28.63 $\mu s$ | 5.93 $\mu s$ | **4.83x** | 8.44 $\mu s$ | 8.20 $\mu s$ | **1.03x** |
+
+### 2. Wire Size & Space Savings
+
+| Benchmark Payload | Master (v1) | V2 (v2) | Size Difference | Space Savings % | Notes |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| `small_int_42` | 1 B | 1 B | 0 B | **0.0%** | Embedded in 1-byte opcode |
+| `int_200` | 3 B | 3 B | 0 B | **0.0%** | Small integer representation |
+| `int_65000` | 5 B | 5 B | 0 B | **0.0%** | 16-bit integer representation |
+| `int_3_billion` | 9 B | 9 B | 0 B | **0.0%** | 32-bit integer representation |
+| `bigint_2_64` | 22 B | 11 B | **-11 B** | **+50.0%** | **2x smaller**: Raw binary vs ASCII decimal |
+| `short_str` (`"hello world"`) | 12 B | 12 B | 0 B | **0.0%** | Fixed UTF-8 string (1-byte opcode prefix) |
+| `str_64_chars` | 67 B | 66 B | **-1 B** | **+1.5%** | LEB128 varint vs `64:` ASCII prefix |
+| `str_1000_chars` | 1,005 B | 1,003 B | **-2 B** | **+0.2%** | LEB128 varint vs `1000:` ASCII prefix |
+| `str_64k_chars` | 65,542 B | 65,540 B | **-2 B** | **+0.0%** | LEB128 varint vs `65536:` ASCII prefix |
+| `bytes_1000` | 1,005 B | 1,003 B | **-2 B** | **+0.2%** | Distinct binary type with varint length |
+| `small_list_5` | 6 B | 6 B | 0 B | **0.0%** | Fixed list (1-byte opcode prefix) |
+| `list_1000_ints` | 2,830 B | 2,811 B | **-19 B** | **+0.7%** | Count-prefixed, eliminates `0x7F` terminator |
+| `small_dict_5` | 16 B | 16 B | 0 B | **0.0%** | Fixed dict (1-byte opcode prefix) |
+| `dict_1000_pairs` | 9,830 B | 9,811 B | **-19 B** | **+0.2%** | Count-prefixed, eliminates `0x7F` terminator |
+| `float_pi` | 5 B | 9 B | +4 B | -80.0% | **Full 64-bit IEEE 754 precision** |
+| `nested_rpc_payload` | 1,008 B | 1,092 B | +84 B | -8.3% | Contains 21 floats stored as 64-bit doubles* |
+| `torrent_metadata` | 2,046 B | 2,049 B | +3 B | -0.1% | Realistic torrent dictionary payload |
+
+*\* In v1, floats defaulted to 32-bit (`DEFAULT_FLOAT_BITS = 32`), which truncated 64-bit Python floats and lost precision. In v2, floats default to full 64-bit double precision. Passing `float_bits=32` in v2 produces **1,008 B** for `nested_rpc_payload`, identical to v1.*
+
+---
+
+## Development
+
+Use `uv` for all local environment and development workflows:
+
+```bash
+# Install and compile Cython extension in editable mode
+uv sync --all-groups
+
+# Run unit tests
+uv run pytest
+
+# Lint and format
+uv run ruff check rencode tests
+uv run ruff format rencode tests
+
+# Run performance benchmark
+uv run python tests/timetest.py
 ```
-test_overall_encode:
-	rencode.pyx: 0.069s (+0.120s) 274.42%
-	rencode.py:  0.189s
 
-test_overall_decode:
-	rencode.pyx: 0.051s (+0.153s) 400.57%
-	rencode.py:  0.204s
-
-Overall functions totals:
-	rencode.pyx: 0.120s (+0.273s) 327.98%
-	rencode.py:  0.393s
-```
-
+---
 
 ## Author
 * Andrew Resch <andrewresch@gmail.com>
 * Website: https://github.com/aresch/rencode
 
 ## License
-See [COPYING](https://github.com/aresch/rencode/blob/master/COPYING)  for license information.
+See [COPYING](COPYING) for license information.
