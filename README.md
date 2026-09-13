@@ -44,6 +44,278 @@ For the complete wire format specification, see [SPEC.md](SPEC.md).
 
 ---
 
+## Usage Guide
+
+### Basic Encoding & Decoding
+
+Use `dumps()` to serialize Python objects into bytes and `loads()` to deserialize bytes back into Python objects:
+
+```python
+import rencode
+
+payload = {
+    "name": "Saturn V",
+    "stages": 3,
+    "thrust_kn": 34500.0,
+    "payload_leo_kg": 140000,
+    "retired": True,
+    "crew": None,
+    "payload_manifest": ["Apollo Command Module", "Lunar Module"],
+}
+
+# Serialize to rencode bytes
+encoded: bytes = rencode.dumps(payload)
+
+# Deserialize from rencode bytes
+data = rencode.loads(encoded)
+assert data == payload
+```
+
+### Working with File Streams (`dump` and `load`)
+
+Rencode provides standard `dump` and `load` helpers to serialize to and deserialize from binary file-like streams:
+
+```python
+import io
+import rencode
+
+# Writing to a binary stream or file
+buffer = io.BytesIO()
+rencode.dump({"status": "ok", "code": 200}, buffer)
+
+# Reading from a binary stream or file
+buffer.seek(0)
+result = rencode.load(buffer)
+assert result["status"] == "ok"
+```
+
+### Type Fidelity & Python Subclasses
+
+Unlike JSON or legacy bencode, Rencode v2 preserves the exact types of native Python collections and values:
+- **`str` vs `bytes`**: Unicode strings and raw binary data remain separate and distinct without manual decoding flags.
+- **`list` vs `tuple`**: Lists serialize as lists; tuples serialize as tuples.
+- **Python Subclasses**: Standard Python subclasses such as `IntEnum`, `namedtuple`, and `OrderedDict` serialize transparently as their underlying value or collection type.
+
+```python
+from collections import OrderedDict, namedtuple
+from enum import IntEnum
+import rencode
+
+class Role(IntEnum):
+    ADMIN = 1
+    USER = 2
+
+Point = namedtuple("Point", ["x", "y"])
+
+data = {
+    "role": Role.ADMIN,
+    "point": Point(10, 20),
+    "ordered": OrderedDict([("first", 1), ("second", 2)]),
+}
+
+encoded = rencode.dumps(data)
+decoded = rencode.loads(encoded)
+
+assert decoded["role"] == 1
+assert decoded["point"] == (10, 20)
+assert decoded["ordered"] == {"first": 1, "second": 2}
+```
+
+### Zero-Copy Buffer Protocol Support
+
+`loads()` natively accepts any Python object implementing the Buffer Protocol (`bytes`, `bytearray`, `memoryview`) without making an intermediate copy of the input:
+
+```python
+import rencode
+
+# Read from a mutable bytearray or memoryview without copying
+buffer = bytearray(rencode.dumps([1, 2, 3, 4]))
+data = rencode.loads(buffer)
+assert data == [1, 2, 3, 4]
+
+view = memoryview(buffer)
+data_from_view = rencode.loads(view)
+assert data_from_view == [1, 2, 3, 4]
+```
+
+### Floating-Point Precision (`float_bits`)
+
+By default, Rencode v2 serializes floating-point numbers in full 64-bit IEEE 754 double precision (`float_bits=64`) to prevent silent loss of precision. For bandwidth-critical workloads where 32-bit single precision is sufficient, pass `float_bits=32`:
+
+```python
+import rencode
+
+val = 3.141592653589793
+
+# Full 64-bit IEEE 754 precision (default, 9 bytes on wire)
+enc64 = rencode.dumps(val)
+assert rencode.loads(enc64) == val
+
+# 32-bit float precision (5 bytes on wire)
+enc32 = rencode.dumps(val, float_bits=32)
+assert round(rencode.loads(enc32), 5) == 3.14159
+```
+
+### Security & Recursion Depth Limits
+
+To guard against stack exhaustion attacks from malicious or deeply nested inputs, `dumps()` and `loads()` enforce a maximum recursion depth limit (default: 1000):
+
+```python
+import rencode
+
+# Build deeply nested structure: [[[[...]]]]
+deep_data = []
+current = deep_data
+for _ in range(50):
+    nested = []
+    current.append(nested)
+    current = nested
+
+# Set a strict recursion ceiling during serialization
+encoded = rencode.dumps(deep_data, max_depth=100)
+
+try:
+    # Fails safely with ValueError if nesting exceeds max_depth during load
+    rencode.loads(encoded, max_depth=20)
+except ValueError as e:
+    print(f"Blocked hostile payload: {e}")
+```
+
+---
+
+## Extensions & Custom Types (`Ext`)
+
+Rencode v2 introduces an open, high-performance extension mechanism (wire opcode `0xFF` / `OP_EXT`) allowing user applications to serialize arbitrary domain objects (such as `datetime`, `UUID`, `Decimal`, or dataclasses) without converting them to generic dicts.
+
+### 1. The `Ext` Container
+
+`rencode.Ext` is a Cython-optimized class representing a tagged extension payload:
+
+```python
+import rencode
+
+# Ext(tag: int, data: bytes)
+# tag: 64-bit unsigned integer (0 <= tag <= 18446744073709551615)
+# data: bytes-like object (bytes, bytearray, memoryview)
+ext = rencode.Ext(tag=1, data=b"custom-binary-payload")
+
+encoded = rencode.dumps(ext)
+decoded = rencode.loads(encoded)
+
+assert isinstance(decoded, rencode.Ext)
+assert decoded.tag == 1
+assert decoded.data == b"custom-binary-payload"
+```
+
+### 2. Serialization with `default`
+
+Pass a `default(obj)` callable to `dumps()` or `dump()` to transform custom objects that rencode doesn't natively handle into an `Ext` instance or other serializable types:
+
+```python
+import datetime
+import uuid
+import rencode
+
+TAG_DATETIME = 1
+TAG_UUID = 2
+
+def serializer(obj):
+    if isinstance(obj, datetime.datetime):
+        # Pack timestamp as ISO string or binary epoch timestamp
+        return rencode.Ext(TAG_DATETIME, obj.isoformat().encode("utf-8"))
+    if isinstance(obj, uuid.UUID):
+        # Pack 16 raw bytes of UUID
+        return rencode.Ext(TAG_UUID, obj.bytes)
+    raise TypeError(f"Object of type {type(obj)} is not serializable")
+```
+
+### 3. Deserialization with `ext_hook`
+
+Pass an `ext_hook(tag: int, data: bytes)` callable to `loads()` or `load()`. When the decoder encounters an extension tag, it delegates instantiation to your hook:
+
+```python
+def deserializer(tag: int, data: bytes):
+    if tag == TAG_DATETIME:
+        return datetime.datetime.fromisoformat(data.decode("utf-8"))
+    if tag == TAG_UUID:
+        return uuid.UUID(bytes=data)
+    # Unrecognized tags can fall back to raw Ext object
+    return rencode.Ext(tag, data)
+```
+
+### 4. Complete End-to-End Example
+
+Here is a complete, self-contained example demonstrating transparent round-trip serialization of custom dataclasses and standard library objects:
+
+```python
+import datetime
+import uuid
+from dataclasses import dataclass
+import rencode
+
+# Define unique extension tags
+TAG_DATETIME = 1
+TAG_UUID = 2
+TAG_USER_ACCOUNT = 100
+
+@dataclass
+class UserAccount:
+    user_id: uuid.UUID
+    username: str
+    created_at: datetime.datetime
+    balance_usd: float
+
+def app_encoder(obj):
+    if isinstance(obj, datetime.datetime):
+        return rencode.Ext(TAG_DATETIME, obj.isoformat().encode("utf-8"))
+    if isinstance(obj, uuid.UUID):
+        return rencode.Ext(TAG_UUID, obj.bytes)
+    if isinstance(obj, UserAccount):
+        # Custom dataclass serializes internal state into nested rencode payload
+        state = {
+            "id": obj.user_id,
+            "name": obj.username,
+            "created": obj.created_at,
+            "bal": obj.balance_usd,
+        }
+        return rencode.Ext(TAG_USER_ACCOUNT, rencode.dumps(state, default=app_encoder))
+    raise TypeError(f"Cannot serialize object of type {type(obj)}")
+
+def app_decoder(tag: int, data: bytes):
+    if tag == TAG_DATETIME:
+        return datetime.datetime.fromisoformat(data.decode("utf-8"))
+    if tag == TAG_UUID:
+        return uuid.UUID(bytes=data)
+    if tag == TAG_USER_ACCOUNT:
+        state = rencode.loads(data, ext_hook=app_decoder)
+        return UserAccount(
+            user_id=state["id"],
+            username=state["name"],
+            created_at=state["created"],
+            balance_usd=state["bal"],
+        )
+    return rencode.Ext(tag, data)
+
+# Instantiate custom objects
+account = UserAccount(
+    user_id=uuid.uuid4(),
+    username="saturn",
+    created_at=datetime.datetime.now(datetime.timezone.utc),
+    balance_usd=1250000.50,
+)
+
+# Transparent round-trip
+encoded_bytes = rencode.dumps(account, default=app_encoder)
+restored_account = rencode.loads(encoded_bytes, ext_hook=app_decoder)
+
+assert restored_account == account
+assert isinstance(restored_account.user_id, uuid.UUID)
+assert isinstance(restored_account.created_at, datetime.datetime)
+print("Round-trip serialization succeeded perfectly!")
+```
+
+---
+
 ## Space Usage Comparison
 
 To evaluate wire-format efficiency, we compare Rencode v2 against Rencode v1 (`master`) and compact JSON (`separators=(',', ':')`) across realistic application workloads and datasets from `tests/timetest.py`:
