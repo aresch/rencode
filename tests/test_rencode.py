@@ -24,6 +24,7 @@
 
 import collections
 import io
+import math
 import pickle
 import struct
 import unittest
@@ -680,6 +681,196 @@ class TestRencodeV2(unittest.TestCase):
         bio.seek(0)
         loaded = rencode.load(bio)
         self.assertEqual(loaded, data)
+
+    def test_float_special_values(self):
+        # 64-bit float specials
+        enc_nan = rencode.dumps(float("nan"))
+        self.assertEqual(enc_nan[0], 0xF8)
+        self.assertTrue(math.isnan(rencode.loads(enc_nan)))
+
+        enc_inf = rencode.dumps(float("inf"))
+        self.assertEqual(enc_inf[0], 0xF8)
+        self.assertEqual(rencode.loads(enc_inf), float("inf"))
+
+        enc_ninf = rencode.dumps(float("-inf"))
+        self.assertEqual(enc_ninf[0], 0xF8)
+        self.assertEqual(rencode.loads(enc_ninf), float("-inf"))
+
+        # 32-bit float specials
+        enc32_nan = rencode.dumps(float("nan"), float_bits=32)
+        self.assertEqual(enc32_nan[0], 0xF7)
+        self.assertTrue(math.isnan(rencode.loads(enc32_nan)))
+
+        enc32_inf = rencode.dumps(float("inf"), float_bits=32)
+        self.assertEqual(enc32_inf[0], 0xF7)
+        self.assertEqual(rencode.loads(enc32_inf), float("inf"))
+
+        enc32_ninf = rencode.dumps(float("-inf"), float_bits=32)
+        self.assertEqual(enc32_ninf[0], 0xF7)
+        self.assertEqual(rencode.loads(enc32_ninf), float("-inf"))
+
+    def test_buffer_growth_beyond_stack_buffer(self):
+        # STACK_BUF_SIZE is 2048 bytes; test malloc from stack_buf and realloc expansion
+        for size in (2500, 8192, 65536, 131072):
+            raw_bytes = b"A" * size
+            enc_bytes = rencode.dumps(raw_bytes)
+            self.assertEqual(rencode.loads(enc_bytes), raw_bytes)
+
+            raw_str = "x" * size
+            enc_str = rencode.dumps(raw_str)
+            self.assertEqual(rencode.loads(enc_str), raw_str)
+
+        # Large list requiring multiple buffer growths
+        large_list = list(range(10000))
+        enc_list = rencode.dumps(large_list)
+        self.assertEqual(rencode.loads(enc_list), large_list)
+
+        # Large dict
+        large_dict = {f"key_{i:04d}": i * 100 for i in range(2000)}
+        enc_dict = rencode.dumps(large_dict)
+        self.assertEqual(rencode.loads(enc_dict), large_dict)
+
+    def test_unhashable_dict_key_in_decoder(self):
+        # Fixed dict with unhashable list key: opcode 0xC1, list count 0 (0xA0), value 1 (0x01)
+        bad_fixed_dict = b"\xc1\xa0\x01"
+        with self.assertRaises(TypeError):
+            rencode.loads(bad_fixed_dict)
+
+        # Variable dict with unhashable dict key: opcode 0xFC, count 1, empty dict key (0xC0), val 1 (0x01)
+        bad_var_dict = b"\xfc\x01\xc0\x01"
+        with self.assertRaises(TypeError):
+            rencode.loads(bad_var_dict)
+
+    def test_invalid_utf8_variable_str(self):
+        # Variable string opcode 0xF9 with length 2 followed by invalid UTF-8 bytes
+        bad_utf8_v = b"\xf9\x02\xff\xfe"
+        with self.assertRaises(UnicodeDecodeError):
+            rencode.loads(bad_utf8_v)
+
+    def test_empty_payload_loads(self):
+        with self.assertRaises(ValueError):
+            rencode.loads(b"")
+
+    def test_invalid_loads_input_type(self):
+        with self.assertRaises(TypeError):
+            rencode.loads(123)  # type: ignore
+        with self.assertRaises(TypeError):
+            rencode.loads("string_not_bytes")  # type: ignore
+        with self.assertRaises(TypeError):
+            rencode.loads(None)  # type: ignore
+
+    def test_unhandled_type_dumps(self):
+        with self.assertRaises(TypeError):
+            rencode.dumps(object())
+        with self.assertRaises(TypeError):
+            rencode.dumps({1, 2, 3})
+
+        # Default handler raising an error
+        def bad_default(o):
+            raise RuntimeError("serialization failure")
+
+        with self.assertRaises(RuntimeError):
+            rencode.dumps(object(), default=bad_default)
+
+        # Default handler returning an unhandled type that causes rejection
+        def selective_default(o):
+            if isinstance(o, complex):
+                return object()  # returns unhandled object
+            raise TypeError(f"Cannot serialize {type(o)}")
+
+        with self.assertRaises(TypeError):
+            rencode.dumps(1 + 2j, default=selective_default)
+
+        # Default handler cycling unhandled objects hits recursion limit
+        with self.assertRaises(ValueError):
+            rencode.dumps(object(), default=lambda o: object(), max_depth=10)
+
+        # Invalid float_bits on actual float
+        with self.assertRaises(ValueError):
+            rencode.dumps(3.14, float_bits=16)
+
+    def test_ext_boundaries_and_hashing(self):
+        # Min tag 0
+        ext0 = rencode.Ext(0, b"zero_tag")
+        self.assertEqual(rencode.loads(rencode.dumps(ext0)), ext0)
+
+        # Max tag 2**64 - 1
+        max_tag = 18446744073709551615
+        ext_max = rencode.Ext(max_tag, b"max_tag")
+        self.assertEqual(rencode.loads(rencode.dumps(ext_max)), ext_max)
+
+        # Empty data payload
+        ext_empty = rencode.Ext(42, b"")
+        self.assertEqual(rencode.loads(rencode.dumps(ext_empty)), ext_empty)
+
+        # Hashability and dict/set usage
+        s = {ext0, ext_max}
+        self.assertIn(ext0, s)
+        self.assertIn(ext_max, s)
+        d = {ext0: "val0", ext_max: "val_max"}
+        self.assertEqual(rencode.loads(rencode.dumps(d)), d)
+
+        # ext_hook raising an error
+        def failing_hook(tag, data):
+            raise RuntimeError("hook failed")
+
+        with self.assertRaises(RuntimeError):
+            rencode.loads(rencode.dumps(ext0), ext_hook=failing_hook)
+
+    def test_non_canonical_encodings(self):
+        # Variable string with length < 32
+        self.assertEqual(rencode.loads(b"\xf9\x01a"), "a")
+        self.assertEqual(rencode.loads(b"\xf9\x00"), "")
+
+        # Variable bytes with length < 32
+        self.assertEqual(rencode.loads(b"\xfa\x01\x41"), b"A")
+        self.assertEqual(rencode.loads(b"\xfa\x00"), b"")
+
+        # Variable list with count < 32
+        self.assertEqual(rencode.loads(b"\xfb\x01\x05"), [5])
+        self.assertEqual(rencode.loads(b"\xfb\x00"), [])
+
+        # Variable tuple with count < 16
+        self.assertEqual(rencode.loads(b"\xfd\x01\x05"), (5,))
+        self.assertEqual(rencode.loads(b"\xfd\x00"), ())
+
+        # Variable dict with count < 32
+        self.assertEqual(rencode.loads(b"\xfc\x01\x61k\x05"), {"k": 5})
+        self.assertEqual(rencode.loads(b"\xfc\x00"), {})
+
+        # Small ints encoded using larger int opcodes
+        self.assertEqual(rencode.loads(b"\xf3\x01"), 1)
+        self.assertEqual(rencode.loads(b"\xf4\x01\x00"), 1)
+        self.assertEqual(rencode.loads(b"\xf5\x01\x00\x00\x00"), 1)
+        self.assertEqual(rencode.loads(b"\xf6\x01\x00\x00\x00\x00\x00\x00\x00"), 1)
+
+    def test_stream_api_options(self):
+        # dump and load with float_bits
+        bio = io.BytesIO()
+        rencode.dump(12.5, bio, float_bits=32)
+        bio.seek(0)
+        loaded = rencode.load(bio)
+        self.assertAlmostEqual(loaded, 12.5, places=4)
+
+        # dump with default serializer
+        bio = io.BytesIO()
+        rencode.dump({1, 2}, bio, default=sorted)
+        bio.seek(0)
+        self.assertEqual(rencode.load(bio), [1, 2])
+
+        # load with ext_hook
+        bio = io.BytesIO()
+        rencode.dump(rencode.Ext(10, b"custom"), bio)
+        bio.seek(0)
+        res = rencode.load(bio, ext_hook=lambda tag, data: f"Tag{tag}:{data.decode()}")
+        self.assertEqual(res, "Tag10:custom")
+
+    def test_truncated_leb128_at_eof(self):
+        # Continuation bit set at EOF without subsequent byte
+        with self.assertRaises(ValueError):
+            rencode.loads(b"\xf9\x80")
+        with self.assertRaises(ValueError):
+            rencode.loads(b"\xfa\x80")
 
 
 if __name__ == "__main__":
