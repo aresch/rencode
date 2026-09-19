@@ -47,5 +47,5 @@ Welcome! This document outlines development guidelines, architectural decisions,
 
 ## CI & Automated Release Pipeline
 
-- `.github/workflows/ci.yml`: Runs tests via `uv` across Python 3.9–3.13 on Linux, macOS, and Windows.
+- `.github/workflows/ci.yml`: Runs tests via `uv` across Python 3.9–3.14 on Linux, macOS, and Windows.
 - `.github/workflows/wheels.yml`: Uses `cibuildwheel` to compile binary wheels for manylinux (x86_64, aarch64), macOS (arm64, x86_64 on Apple Silicon runners), and Windows, publishing to PyPI on release tags (`v*`).
